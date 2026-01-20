@@ -45,7 +45,8 @@ public class FogModels {
                 .transparency(Transparency.TRANSLUCENT)
                 .backfaceCulling(false)
                 .writeMask(WriteMask.COLOR)
-                .cardinalLightingMode(CardinalLightingMode.ENTITY)
+                .cardinalLightingMode(CardinalLightingMode.OFF)
+                .useLight(true)
                 .shaders(FOG_SHADER)
                 .build();
 
@@ -54,7 +55,7 @@ public class FogModels {
         FogVertexList vertices = new FogVertexList(vertexCount);
 
         // 防止 Z-Fighting，引入微小偏移量，让 Mesh 比标准 1x1x1 稍微小一点点
-        float eps = 0.02f;
+        float eps = 0.05f;
 
         float xMax = 1.0f - eps;
         float zMax = 1.0f - eps;
@@ -107,7 +108,7 @@ public class FogModels {
         v.y[index] = y;
         v.z[index] = z;
         v.u[index] = 0;
-        v.v[index] = 0;
+        v.v[index] = y;
         v.nx[index] = -1;
         v.ny[index] = 0;
         v.nz[index] = 0;

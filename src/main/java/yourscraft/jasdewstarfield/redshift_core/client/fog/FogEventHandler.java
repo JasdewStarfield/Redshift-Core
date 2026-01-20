@@ -117,6 +117,10 @@ public class FogEventHandler {
             }
         }
 
+        if (level.getBiome(playerPos).is(AEROSOL_MANGROVES)) {
+            totalWeight += 2.0f;
+        }
+
         // 计算平均密度
         float density = totalWeight / sampleCount;
 

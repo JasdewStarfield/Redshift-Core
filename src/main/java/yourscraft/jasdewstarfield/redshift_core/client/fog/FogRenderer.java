@@ -64,27 +64,6 @@ public class FogRenderer {
         return (wave1 + wave2 * 0.5f + randomPhase * 0.2f) * FogConfig.BREATHING_AMPLITUDE;
     }
 
-    static float calculateWorldBrightness(Minecraft mc, float partialTick) {
-        if (mc.level == null) return 1.0f;
-
-        // 1. 获取太阳角度
-        float sunAngle = mc.level.getSunAngle(partialTick);
-        // cos(0) = 1 (Day), cos(pi) = -1 (Night). 映射到 0~1
-        float dayLight = Mth.cos(sunAngle) * 0.5f + 0.5f;
-        dayLight = Mth.clamp(dayLight, 0.0f, 1.0f);
-
-        // 2. 考虑天气
-        float rain = mc.level.getRainLevel(partialTick);
-        float thunder = mc.level.getThunderLevel(partialTick);
-
-        // 雨天最多降低 20% 亮度，雷暴最多降低 50%
-        dayLight *= (1.0f - rain * 0.2f);
-        dayLight *= (1.0f - thunder * 0.5f);
-
-        // 3. 混合最小亮度 (保留夜间荧光感)
-        return MIN_BRIGHTNESS + (1.0f - MIN_BRIGHTNESS) * dayLight;
-    }
-
     public static float computeFade(double dist, double maxDist) {
         if (dist > maxDist) return 0.0f;
         double fadeStart = maxDist - 32.0;

@@ -11,9 +11,10 @@ import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.instance.InstanceTypes;
 import dev.engine_room.flywheel.lib.instance.TransformedInstance;
 import dev.engine_room.flywheel.lib.task.SimplePlan;
-import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -79,7 +80,6 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
         double smoothTime = gameTime + partialTick;
         float flowTime = (float) (smoothTime * FogConfig.ANIMATION_SPEED);
         float breathingTime = (float) (smoothTime * FogConfig.BREATHING_SPEED);
-        float baseWorldBrightness = FogRenderer.calculateWorldBrightness(Minecraft.getInstance(), partialTick);
         float immersion = FogEventHandler.getCurrentFogWeight();
         double maxDist = (FogConfig.RENDER_DISTANCE_CHUNKS - 1) * 16.0;
 
@@ -114,14 +114,14 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
 
             // 更新实例属性
             if (!instances.isEmpty()) {
-                updateInstances(instances, data, chunkKey, flowTime, breathingTime, baseWorldBrightness, immersion, maxDist, cameraPos);
+                updateInstances(instances, data, chunkKey, breathingTime, flowTime, immersion, maxDist, cameraPos);
             }
         }
     }
 
     private void updateInstances(List<TransformedInstance> instances, FogGenerator.FogChunkData data,
-                                 long chunkKey, float flowTime, float breathingTime,
-                                 float brightness, float immersion, double maxDist, net.minecraft.world.phys.Vec3 cameraPos) {
+                                 long chunkKey, float breathingTime, float flowTime,
+                                 float immersion, double maxDist, net.minecraft.world.phys.Vec3 cameraPos) {
 
         int chunkX = (int) (chunkKey & 0xFFFFFFFFL);
         int chunkZ = (int) (chunkKey >>> 32);
@@ -132,13 +132,10 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
 
         List<FogGenerator.FogPoint> points = data.points();
 
-        // 基础颜色 (RGB) - 可以根据需要调整
+        // 基础颜色
         float baseR = 0.65f;
         float baseG = 0.75f;
         float baseB = 0.45f;
-        float finalR = baseR * brightness;
-        float finalG = baseG * brightness;
-        float finalB = baseB * brightness;
 
         for (int i = 0; i < instances.size(); i++) {
             TransformedInstance instance = instances.get(i);
@@ -169,11 +166,19 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
             float localBreathing = FogRenderer.getComplexBreathing(wx, wz, breathingTime);
             float y = FogConfig.FOG_HEIGHT + point.yOffset() + localBreathing;
 
-            float finalAlpha = point.alpha() * fade * proximityFade;
+            float finalAlpha = point.alpha() * fade * proximityFade * 0.6f;
 
             float relX = wx - renderOrigin.getX();
             float relY = y - renderOrigin.getY();
             float relZ = wz - renderOrigin.getZ();
+
+            // 计算光照
+            BlockPos lightPos = BlockPos.containing(wx + 0.5, y, wz + 0.5);
+
+            int blockLight = effect.level().getBrightness(LightLayer.BLOCK, lightPos);
+            int skyLight = effect.level().getBrightness(LightLayer.SKY, lightPos);
+
+            blockLight = Math.max(blockLight, 4);
 
             // --- 设置实例属性 ---
 
@@ -184,11 +189,11 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
                     .setChanged();
 
             // 2. 颜色
-            instance.color(finalR, finalG, finalB, finalAlpha)
+            instance.color(baseR, baseG, baseB, finalAlpha)
                     .setChanged();
 
             // 3. 光照
-            instance.light(15, 15)
+            instance.light(blockLight, skyLight)
                     .setChanged();
         }
     }
