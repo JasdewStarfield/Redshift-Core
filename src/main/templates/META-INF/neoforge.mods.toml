@@ -77,3 +77,17 @@ side = "BOTH"
 # stop your mod loading on the server for example.
 #[features."${mod_id}"]
 #openGLVersion="[3.2,)"
+
+[[dependencies."${mod_id}"]]
+modId = "flywheel"
+type = "required"
+versionRange = "[1.0.0,)"
+ordering = "AFTER"
+side = "CLIENT"
+
+[[dependencies."${mod_id}"]]
+modId = "ponder"
+type = "required"
+versionRange = "[1.0.0,)"
+ordering = "AFTER"
+side = "BOTH"
