@@ -2,26 +2,17 @@ package yourscraft.jasdewstarfield.redshift_core.client.fog;
 
 import com.mojang.blaze3d.vertex.*;
 import dev.engine_room.flywheel.api.event.ReloadLevelRendererEvent;
-import dev.engine_room.flywheel.api.model.Model;
 import dev.engine_room.flywheel.api.visualization.VisualizationManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 @EventBusSubscriber(value = Dist.CLIENT)
 public class FogRenderer {
-
-    private static final Map<Integer, Model> LOD_MODELS = new ConcurrentHashMap<>();
-    private static final ResourceLocation FOG_TEXTURE = ResourceLocation.fromNamespaceAndPath("redshift",
-            "textures/environment/fog_cloud.png");
 
     private static final FogGenerator generator = new FogGenerator();
 

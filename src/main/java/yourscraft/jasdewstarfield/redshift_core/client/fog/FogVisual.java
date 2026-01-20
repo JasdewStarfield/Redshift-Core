@@ -10,15 +10,14 @@ import dev.engine_room.flywheel.api.visual.EffectVisual;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.instance.InstanceTypes;
 import dev.engine_room.flywheel.lib.instance.TransformedInstance;
-import dev.engine_room.flywheel.lib.model.Models;
 import dev.engine_room.flywheel.lib.task.SimplePlan;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Vec3i;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,13 +28,26 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
     private final Vec3i renderOrigin;
     private final FogEffect effect;
 
-    // 实例缓存逻辑
+    // 实例缓存：ChunkPos -> 实例列表
     private final ConcurrentHashMap<Long, List<TransformedInstance>> chunkInstances = new ConcurrentHashMap<>();
+
+    // LOD 状态缓存：ChunkPos -> VoxelSize (用于检测 LOD 变化)
+    private final ConcurrentHashMap<Long, Integer> chunkLODs = new ConcurrentHashMap<>();
+
+    // Instancer 缓存
+    private final Map<Integer, Instancer<TransformedInstance>> instancerMap = new HashMap<>();
 
     public FogVisual(VisualizationContext ctx, FogEffect effect) {
         this.provider = ctx.instancerProvider();
         this.renderOrigin = ctx.renderOrigin();
         this.effect = effect;
+    }
+
+    private Instancer<TransformedInstance> getInstancer(int size) {
+        return instancerMap.computeIfAbsent(size, s -> {
+            Model model = FogModels.get(s);
+            return provider.instancer(InstanceTypes.TRANSFORMED, model);
+        });
     }
 
     @Override
@@ -45,32 +57,23 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
     }
 
     private void updateFog(DynamicVisual.Context ctx) {
-        // 1. 获取 Instancer
-        Model model = Models.block(Blocks.WHITE_STAINED_GLASS.defaultBlockState());
-        Instancer<TransformedInstance> instancer = provider.instancer(
-                InstanceTypes.TRANSFORMED,
-                model
-        );
-
-        // 2. 获取 FogGenerator 逻辑数据
+        // 1. 获取 FogGenerator 逻辑数据
         ConcurrentHashMap<Long, FogGenerator.FogChunkData> logicChunks = FogRenderer.getGenerator().getVisibleChunks();
 
-        if (!logicChunks.isEmpty()) System.out.println("Rendering Fog Chunks: " + logicChunks.size());
-
-        // 3. 清理失效的 Chunk 实例
+        // 2. 清理失效的 Chunk 实例
         chunkInstances.keySet().removeIf(key -> {
             if (!logicChunks.containsKey(key)) {
                 List<TransformedInstance> instances = chunkInstances.get(key);
                 if (instances != null) {
                     instances.forEach(Instance::delete); // 删除 Flywheel 实例
                 }
+                chunkLODs.remove(key);
                 return true;
             }
             return false;
         });
 
-        // 4. 准备动画参数
-        // 从 DynamicVisual.Context 获取部分 Tick 信息
+        // 3. 准备动画参数
         float partialTick = ctx.partialTick();
         long gameTime = effect.level() != null ? effect.level().getLevelData().getGameTime() : 0;
         double smoothTime = gameTime + partialTick;
@@ -82,25 +85,37 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
 
         Vec3 cameraPos = ctx.camera().getPosition();
 
-        // 5. 更新或创建实例
+        // 4. 更新或创建实例
         for (Map.Entry<Long, FogGenerator.FogChunkData> entry : logicChunks.entrySet()) {
             long chunkKey = entry.getKey();
             FogGenerator.FogChunkData data = entry.getValue();
+            int currentSize = data.voxelSize();
 
             List<TransformedInstance> instances = chunkInstances.computeIfAbsent(chunkKey, k -> new ArrayList<>());
 
+            int cachedSize = chunkLODs.getOrDefault(chunkKey, -1);
+
             // 如果数量不匹配（LOD 变化或新生成），重建该 Chunk 的所有实例
-            if (instances.size() != data.points().size()) {
+            if (instances.size() != data.points().size() || cachedSize != currentSize) {
+                // 销毁旧的
                 instances.forEach(Instance::delete);
                 instances.clear();
-                for (int i = 0; i < data.points().size(); i++) {
-                    // 创建新实例
-                    instances.add(instancer.createInstance());
+
+                chunkLODs.put(chunkKey, currentSize);
+
+                // 如果有数据，创建新实例
+                if (!data.points().isEmpty()) {
+                    Instancer<TransformedInstance> instancer = getInstancer(currentSize);
+                    for (int i = 0; i < data.points().size(); i++) {
+                        instances.add(instancer.createInstance());
+                    }
                 }
             }
 
             // 更新实例属性
-            updateInstances(instances, data, chunkKey, flowTime, breathingTime, baseWorldBrightness, immersion, maxDist, cameraPos);
+            if (!instances.isEmpty()) {
+                updateInstances(instances, data, chunkKey, flowTime, breathingTime, baseWorldBrightness, immersion, maxDist, cameraPos);
+            }
         }
     }
 
@@ -113,6 +128,7 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
         float worldChunkX = chunkX * 16;
         float worldChunkZ = chunkZ * 16;
         float size = data.voxelSize();
+        float heightScale = FogConfig.Y_RANGE;
 
         List<FogGenerator.FogPoint> points = data.points();
 
@@ -164,7 +180,7 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
             // 1. 变换
             instance.setIdentityTransform()
                     .translate(relX, relY, relZ)
-                    .scale(size, size, size)
+                    .scale(size, heightScale, size) // 非均匀缩放
                     .setChanged();
 
             // 2. 颜色
