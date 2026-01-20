@@ -1,14 +1,14 @@
 package yourscraft.jasdewstarfield.redshift_core.client.fog;
 
 import com.mojang.blaze3d.vertex.*;
+import dev.engine_room.flywheel.api.visualization.VisualizationManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 
 @EventBusSubscriber(value = Dist.CLIENT)
@@ -26,24 +26,17 @@ public class FogRenderer {
     }
 
     @SubscribeEvent
-    public static void onRenderLevel(RenderLevelStageEvent event) {
-        // 只在半透明渲染后执行更新逻辑
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
+    public static void onLevelLoaded(LevelEvent.Load event) {
+        Level level = (Level) event.getLevel();
 
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null || mc.player == null) return;
+        if (!level.isClientSide()) {
+            return;
+        }
 
-        // 1. 更新生成器逻辑 (CPU 计算)
-        generator.update(event.getCamera().getPosition(), mc.level.getGameTime());
-
-        // 2. 驱动 Flywheel 管理器 (实例更新)
-        FogFlywheelManager.getInstance().tick(mc.level, event);
-    }
-
-    @SubscribeEvent
-    public static void onLevelUnload(LevelEvent.Unload event) {
-        if (event.getLevel().isClientSide()) {
-            FogFlywheelManager.getInstance().reset();
+        VisualizationManager manager = VisualizationManager.get(level);
+        if (manager != null) {
+            // 这一步会触发 FogEffect.visualize -> new FogVisual -> 开始渲染
+            manager.effects().queueAdd(new FogEffect(level));
         }
     }
 

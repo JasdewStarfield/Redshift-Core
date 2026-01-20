@@ -4,75 +4,58 @@ import dev.engine_room.flywheel.api.instance.Instance;
 import dev.engine_room.flywheel.api.instance.Instancer;
 import dev.engine_room.flywheel.api.instance.InstancerProvider;
 import dev.engine_room.flywheel.api.model.Model;
-import dev.engine_room.flywheel.api.visualization.VisualizationManager;
+import dev.engine_room.flywheel.api.task.Plan;
+import dev.engine_room.flywheel.api.visual.DynamicVisual;
+import dev.engine_room.flywheel.api.visual.EffectVisual;
+import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.instance.InstanceTypes;
 import dev.engine_room.flywheel.lib.instance.TransformedInstance;
 import dev.engine_room.flywheel.lib.model.Models;
-import dev.engine_room.flywheel.lib.model.baked.PartialModel;
+import dev.engine_room.flywheel.lib.task.SimplePlan;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.Vec3i;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class FogFlywheelManager {
+public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
 
-    private static FogFlywheelManager INSTANCE;
+    private final InstancerProvider provider;
+    private final Vec3i renderOrigin;
+    private final FogEffect effect;
 
-    // 缓存 Chunk 对应的实例列表
+    // 实例缓存逻辑
     private final ConcurrentHashMap<Long, List<TransformedInstance>> chunkInstances = new ConcurrentHashMap<>();
 
-    // 我们使用的模型
-    public static final PartialModel FOG_MODEL = PartialModel.of(
-            ResourceLocation.fromNamespaceAndPath("redshift", "block/fog_cloud")
-    );
-
-    public static FogFlywheelManager getInstance() {
-        if (INSTANCE == null) {
-            INSTANCE = new FogFlywheelManager();
-        }
-        return INSTANCE;
+    public FogVisual(VisualizationContext ctx, FogEffect effect) {
+        this.provider = ctx.instancerProvider();
+        this.renderOrigin = ctx.renderOrigin();
+        this.effect = effect;
     }
 
-    /**
-     * 在每一帧渲染时调用，用于更新实例的动画（呼吸、飘动）
-     */
-    public void tick(Level level, RenderLevelStageEvent event) {
-        // 1. 获取 VisualizationManager，这是 Flywheel 的入口
-        if (!VisualizationManager.supportsVisualization(level)) {
-            reset(); // 如果不支持（例如后端被禁用），清理所有实例
-            return;
-        }
+    @Override
+    public Plan<Context> planFrame() {
+        // Flywheel 的并行执行计划
+        return SimplePlan.of(this::updateFog);
+    }
 
-        VisualizationManager manager = VisualizationManager.get(level);
-        if (manager == null) return;
-
-        // 3. 获取 Instancer
-        // 关键点：使用 RenderType.translucent() 以支持半透明混合
-        InstancerProvider provider;
-        if (manager instanceof InstancerProvider instancerProvider) {
-            provider = instancerProvider;
-        } else {
-            return;
-        }
-
+    private void updateFog(DynamicVisual.Context ctx) {
+        // 1. 获取 Instancer
         Model model = Models.block(Blocks.WHITE_STAINED_GLASS.defaultBlockState());
-
         Instancer<TransformedInstance> instancer = provider.instancer(
                 InstanceTypes.TRANSFORMED,
                 model
         );
 
-        // 4. 获取 FogGenerator 逻辑数据
+        // 2. 获取 FogGenerator 逻辑数据
         ConcurrentHashMap<Long, FogGenerator.FogChunkData> logicChunks = FogRenderer.getGenerator().getVisibleChunks();
 
-        // 5. 清理失效的 Chunk 实例
+        // 3. 清理失效的 Chunk 实例
         chunkInstances.keySet().removeIf(key -> {
             if (!logicChunks.containsKey(key)) {
                 List<TransformedInstance> instances = chunkInstances.get(key);
@@ -84,9 +67,10 @@ public class FogFlywheelManager {
             return false;
         });
 
-        // 准备动画参数
-        long gameTime = level.getGameTime();
-        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(true);
+        // 4. 准备动画参数
+        // 从 DynamicVisual.Context 获取部分 Tick 信息
+        float partialTick = ctx.partialTick();
+        long gameTime = effect.level() != null ? effect.level().getLevelData().getGameTime() : 0;
         double smoothTime = gameTime + partialTick;
         float flowTime = (float) (smoothTime * FogConfig.ANIMATION_SPEED);
         float breathingTime = (float) (smoothTime * FogConfig.BREATHING_SPEED);
@@ -94,7 +78,9 @@ public class FogFlywheelManager {
         float immersion = FogEventHandler.getCurrentFogWeight();
         double maxDist = (FogConfig.RENDER_DISTANCE_CHUNKS - 1) * 16.0;
 
-        // 6. 更新或创建实例
+        Vec3 cameraPos = ctx.camera().getPosition();
+
+        // 5. 更新或创建实例
         for (Map.Entry<Long, FogGenerator.FogChunkData> entry : logicChunks.entrySet()) {
             long chunkKey = entry.getKey();
             FogGenerator.FogChunkData data = entry.getValue();
@@ -111,8 +97,8 @@ public class FogFlywheelManager {
                 }
             }
 
-            // 更新实例属性 (CPU -> GPU 属性上传)
-            updateInstances(instances, data, chunkKey, flowTime, breathingTime, baseWorldBrightness, immersion, maxDist, event.getCamera().getPosition());
+            // 更新实例属性
+            updateInstances(instances, data, chunkKey, flowTime, breathingTime, baseWorldBrightness, immersion, maxDist, cameraPos);
         }
     }
 
@@ -146,7 +132,7 @@ public class FogFlywheelManager {
             // 计算距离淡出 (Fade)
             double distSq = (wx - cameraPos.x) * (wx - cameraPos.x) + (wz - cameraPos.z) * (wz - cameraPos.z);
             double dist = Math.sqrt(distSq);
-            float fade = FogRenderer.computeFade(dist, maxDist); // 提取出来的公共方法
+            float fade = FogRenderer.computeFade(dist, maxDist);
 
             if (fade <= 0.01f) {
                 // 如果完全不可见，将矩阵设为零，Flywheel 会剔除它
@@ -167,27 +153,35 @@ public class FogFlywheelManager {
 
             float finalAlpha = point.alpha() * fade * proximityFade;
 
+            float relX = wx - renderOrigin.getX();
+            float relY = y - renderOrigin.getY();
+            float relZ = wz - renderOrigin.getZ();
+
             // --- 设置实例属性 ---
 
-            // 1. 变换 (Transform)
+            // 1. 变换
             instance.setIdentityTransform()
-                    .translate(wx, y, wz)
+                    .translate(relX, relY, relZ)
                     .scale(size, size, size)
                     .setChanged();
 
-            // 2. 颜色 (Color) - TransformedInstance 支持这个！
-            // 注意：Alpha 必须配合 RenderType.translucent() 才能生效
+            // 2. 颜色
             instance.color(finalR, finalG, finalB, finalAlpha)
                     .setChanged();
 
-            // 3. 光照 (Light) - 设置为最大天空光和方块光，或者根据环境动态调整
-            // 这里设为 (15, 15) 让它看起来发光，或者 (0, 0) 让它受环境光影响
-            instance.light(15, 15)
+            // 3. 光照
+            instance.light(3, 0)
                     .setChanged();
         }
     }
 
-    public void reset() {
+    @Override
+    public void update(float partialTick) {
+    }
+
+    @Override
+    public void delete() {
+        // 清理所有创建的实例
         chunkInstances.values().forEach(list -> list.forEach(Instance::delete));
         chunkInstances.clear();
     }
