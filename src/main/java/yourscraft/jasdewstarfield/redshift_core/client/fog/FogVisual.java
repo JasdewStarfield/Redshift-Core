@@ -55,6 +55,8 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
         // 2. 获取 FogGenerator 逻辑数据
         ConcurrentHashMap<Long, FogGenerator.FogChunkData> logicChunks = FogRenderer.getGenerator().getVisibleChunks();
 
+        if (!logicChunks.isEmpty()) System.out.println("Rendering Fog Chunks: " + logicChunks.size());
+
         // 3. 清理失效的 Chunk 实例
         chunkInstances.keySet().removeIf(key -> {
             if (!logicChunks.containsKey(key)) {
@@ -170,7 +172,7 @@ public class FogVisual implements EffectVisual<FogEffect>, DynamicVisual {
                     .setChanged();
 
             // 3. 光照
-            instance.light(3, 0)
+            instance.light(15, 15)
                     .setChanged();
         }
     }

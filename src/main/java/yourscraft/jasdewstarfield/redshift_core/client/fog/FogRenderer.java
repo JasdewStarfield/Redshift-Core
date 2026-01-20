@@ -1,19 +1,25 @@
 package yourscraft.jasdewstarfield.redshift_core.client.fog;
 
 import com.mojang.blaze3d.vertex.*;
+import dev.engine_room.flywheel.api.event.ReloadLevelRendererEvent;
+import dev.engine_room.flywheel.api.model.Model;
 import dev.engine_room.flywheel.api.visualization.VisualizationManager;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.Level;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @EventBusSubscriber(value = Dist.CLIENT)
 public class FogRenderer {
 
+    private static final Map<Integer, Model> LOD_MODELS = new ConcurrentHashMap<>();
     private static final ResourceLocation FOG_TEXTURE = ResourceLocation.fromNamespaceAndPath("redshift",
             "textures/environment/fog_cloud.png");
 
@@ -26,17 +32,29 @@ public class FogRenderer {
     }
 
     @SubscribeEvent
-    public static void onLevelLoaded(LevelEvent.Load event) {
-        Level level = (Level) event.getLevel();
-
-        if (!level.isClientSide()) {
-            return;
-        }
+    public static void onReloadLevelRenderer(ReloadLevelRendererEvent event) {
+        ClientLevel level = event.level();
 
         VisualizationManager manager = VisualizationManager.get(level);
         if (manager != null) {
-            // 这一步会触发 FogEffect.visualize -> new FogVisual -> 开始渲染
+            System.out.println("[Redshift Debug] Adding FogEffect to VisualizationManager");
             manager.effects().queueAdd(new FogEffect(level));
+        } else {
+            System.out.println("[Redshift Debug] VisualizationManager is NULL! Flywheel backend might be OFF.");
+        }
+    }
+
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        // 只有在游戏进行中且不暂停时更新
+        if (mc.level != null && mc.player != null && !mc.isPaused()) {
+            // 获取相机位置用于 LOD 计算
+            net.minecraft.world.phys.Vec3 pos = mc.player.getEyePosition();
+            long time = mc.level.getGameTime();
+
+            // 驱动生成器更新逻辑
+            generator.update(pos, time);
         }
     }
 

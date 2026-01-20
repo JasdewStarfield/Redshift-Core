@@ -134,7 +134,7 @@ public class FogEventHandler {
 
         // 自定义雾参数：
         float customNear = -2.0f;
-        float customFar = 36.0f + breathing;
+        float customFar = 24.0f + breathing;
 
         // 基于 weight 插值
         float finalNear = Mth.lerp(weight, vanillaNear, customNear);
