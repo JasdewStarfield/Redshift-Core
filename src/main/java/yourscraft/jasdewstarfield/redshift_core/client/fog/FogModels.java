@@ -1,6 +1,7 @@
 package yourscraft.jasdewstarfield.redshift_core.client.fog;
 
 import dev.engine_room.flywheel.api.material.CardinalLightingMode;
+import dev.engine_room.flywheel.api.material.MaterialShaders;
 import dev.engine_room.flywheel.api.material.Transparency;
 import dev.engine_room.flywheel.api.material.WriteMask;
 import dev.engine_room.flywheel.api.model.Model;
@@ -20,6 +21,19 @@ public class FogModels {
     private static final ResourceLocation FOG_TEXTURE = ResourceLocation.fromNamespaceAndPath("redshift",
             "textures/environment/fog_cloud.png");
 
+    private record RedshiftFogShader() implements MaterialShaders {
+        @Override
+        public ResourceLocation vertexSource() {
+            return ResourceLocation.fromNamespaceAndPath("redshift", "shaders/fog.vert");
+        }
+        @Override
+        public ResourceLocation fragmentSource() {
+            return ResourceLocation.fromNamespaceAndPath("flywheel", "material/default.frag");
+        }
+    }
+
+    private static final MaterialShaders FOG_SHADER = new RedshiftFogShader();
+
     public static Model get(int voxelSize) {
         return CACHE.computeIfAbsent(voxelSize, FogModels::createFogModel);
     }
@@ -32,15 +46,15 @@ public class FogModels {
                 .backfaceCulling(false)
                 .writeMask(WriteMask.COLOR)
                 .cardinalLightingMode(CardinalLightingMode.ENTITY)
+                .shaders(FOG_SHADER)
                 .build();
 
         // 2. 构建 Mesh
         int vertexCount = 20;
         FogVertexList vertices = new FogVertexList(vertexCount);
 
-
         // 防止 Z-Fighting，引入微小偏移量，让 Mesh 比标准 1x1x1 稍微小一点点
-        float eps = 0.002f;
+        float eps = 0.02f;
 
         float xMax = 1.0f - eps;
         float zMax = 1.0f - eps;
@@ -48,43 +62,37 @@ public class FogModels {
         float yMin = 0f;
         float yMax = 1.0f;
 
-        // UV 计算
-        float uMin = 0;
-        float vMin = 0;
-        float uMax = size / 32.0f;
-        float vMax = size / 32.0f;
-
         int i = 0;
 
         // --- 顶面 (Y = 1) ---
-        writeVertex(vertices, i++, eps, yMax, eps, uMin, vMin, 0, 1, 0);
-        writeVertex(vertices, i++, eps, yMax, zMax, uMin, vMax, 0, 1, 0);
-        writeVertex(vertices, i++, xMax, yMax, zMax, uMax, vMax, 0, 1, 0);
-        writeVertex(vertices, i++, xMax, yMax, eps, uMax, vMin, 0, 1, 0);
+        writeVertex(vertices, i++, eps, yMax, eps);
+        writeVertex(vertices, i++, eps, yMax, zMax);
+        writeVertex(vertices, i++, xMax, yMax, zMax);
+        writeVertex(vertices, i++, xMax, yMax, eps);
 
         // --- 北面 (Z-) ---
-        writeVertex(vertices, i++, xMax, yMax, eps, uMax, vMin, 0, 0, -1);
-        writeVertex(vertices, i++, eps, yMax, eps, uMin, vMin, 0, 0, -1);
-        writeVertex(vertices, i++, eps, yMin, eps, uMin, vMax, 0, 0, -1);
-        writeVertex(vertices, i++, xMax, yMin, eps, uMax, vMax, 0, 0, -1);
+        writeVertex(vertices, i++, xMax, yMax, eps);
+        writeVertex(vertices, i++, eps, yMax, eps);
+        writeVertex(vertices, i++, eps, yMin, eps);
+        writeVertex(vertices, i++, xMax, yMin, eps);
 
         // --- 南面 (Z+) ---
-        writeVertex(vertices, i++, eps, yMax, zMax, uMin, vMin, 0, 0, 1);
-        writeVertex(vertices, i++, xMax, yMax, zMax, uMax, vMin, 0, 0, 1);
-        writeVertex(vertices, i++, xMax, yMin, zMax, uMax, vMax, 0, 0, 1);
-        writeVertex(vertices, i++, eps, yMin, zMax, uMin, vMax, 0, 0, 1);
+        writeVertex(vertices, i++, eps, yMax, zMax);
+        writeVertex(vertices, i++, xMax, yMax, zMax);
+        writeVertex(vertices, i++, xMax, yMin, zMax);
+        writeVertex(vertices, i++, eps, yMin, zMax);
 
         // --- 西面 (X-) ---
-        writeVertex(vertices, i++, eps, yMax, eps, uMax, vMin, -1, 0, 0);
-        writeVertex(vertices, i++, eps, yMax, zMax, uMin, vMin, -1, 0, 0);
-        writeVertex(vertices, i++, eps, yMin, zMax, uMin, vMax, -1, 0, 0);
-        writeVertex(vertices, i++, eps, yMin, eps, uMax, vMax, -1, 0, 0);
+        writeVertex(vertices, i++, eps, yMax, eps);
+        writeVertex(vertices, i++, eps, yMax, zMax);
+        writeVertex(vertices, i++, eps, yMin, zMax);
+        writeVertex(vertices, i++, eps, yMin, eps);
 
         // --- 东面 (X+) ---
-        writeVertex(vertices, i++, xMax, yMax, zMax, uMax, vMin, 1, 0, 0);
-        writeVertex(vertices, i++, xMax, yMax, eps, uMin, vMin, 1, 0, 0);
-        writeVertex(vertices, i++, xMax, yMin, eps, uMin, vMax, 1, 0, 0);
-        writeVertex(vertices, i++, xMax, yMin, zMax, uMax, vMax, 1, 0, 0);
+        writeVertex(vertices, i++, xMax, yMax, zMax);
+        writeVertex(vertices, i++, xMax, yMax, eps);
+        writeVertex(vertices, i++, xMax, yMin, eps);
+        writeVertex(vertices, i++, xMax, yMin, zMax);
 
         // 3. 创建 SimpleQuadMesh
         SimpleQuadMesh mesh = new SimpleQuadMesh(vertices, "fog_lod_" + size);
@@ -94,15 +102,15 @@ public class FogModels {
         return new SimpleModel(List.of(configuredMesh));
     }
 
-    private static void writeVertex(FogVertexList v, int index, float x, float y, float z, float u, float vTex, float nx, float ny, float nz) {
+    private static void writeVertex(FogVertexList v, int index, float x, float y, float z) {
         v.x[index] = x;
         v.y[index] = y;
         v.z[index] = z;
-        v.u[index] = u;
-        v.v[index] = vTex;
-        v.nx[index] = nx;
-        v.ny[index] = ny;
-        v.nz[index] = nz;
+        v.u[index] = 0;
+        v.v[index] = 0;
+        v.nx[index] = -1;
+        v.ny[index] = 0;
+        v.nz[index] = 0;
     }
 
     private static class FogVertexList implements DefaultVertexList {
