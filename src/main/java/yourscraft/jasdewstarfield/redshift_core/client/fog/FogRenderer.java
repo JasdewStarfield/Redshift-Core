@@ -32,8 +32,6 @@ public class FogRenderer {
 
     private static final ByteBufferBuilder BUFFER_BUILDER = new ByteBufferBuilder(2048);
 
-    private static final float MIN_BRIGHTNESS = 0.1f;
-
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
         // 只在半透明方块渲染后绘制，保证水体混合正常
@@ -163,14 +161,14 @@ public class FogRenderer {
         float maxZ = (float)z + size - eps;
 
         // 基础颜色
-        float baseR = 0.65f;
-        float baseG = 0.75f;
-        float baseB = 0.45f;
+        float baseR = FogConfig.FOG_COLOR_R;
+        float baseG = FogConfig.FOG_COLOR_G;
+        float baseB = FogConfig.FOG_COLOR_B;
 
         int blockLight = LightTexture.block(packedLight);
         int skyLight = LightTexture.sky(packedLight);
-        float skyDarken = mc.level.getSkyDarken(1.0f);
-        int adjustedSky = skyLight - mc.level.getSkyDarken();
+        int skyDarken = (int) mc.level.getSkyDarken(1.0f);
+        int adjustedSky = skyLight - skyDarken;
 
         if (adjustedSky > 0) {
             float sunAngle = mc.level.getSunAngle(1.0F);
@@ -179,12 +177,10 @@ public class FogRenderer {
             adjustedSky = Math.round(adjustedSky * Mth.cos(sunAngle));
         }
 
-        int minMoonlight = 6;
-
-        int adjustedSkyLight = Mth.clamp(adjustedSky, minMoonlight, 15);
+        int adjustedSkyLight = Mth.clamp(adjustedSky, FogConfig.MIN_MOONLIGHT, 15);
 
         float maxLight = Math.max(blockLight, adjustedSkyLight) / 15.0f;
-        float lightIntensity = Mth.lerp(maxLight, MIN_BRIGHTNESS, 1.0f);
+        float lightIntensity = Mth.lerp(maxLight, FogConfig.MIN_BRIGHTNESS, 1.0f);
 
         float r = baseR * lightIntensity;
         float g = baseG * lightIntensity;
@@ -195,7 +191,7 @@ public class FogRenderer {
         Matrix4f mat = poseStack.last().pose();
 
         // 纹理缩放 (控制纹理在方块上的疏密)
-        float texScale = 32.0f;
+        float texScale = FogConfig.TEXTURE_SCALE;
 
         // UV 计算 (基于世界坐标 + 时间流动)
         float u1 = (float) (x / texScale + time);
@@ -269,8 +265,8 @@ public class FogRenderer {
     }
 
     private static Vec2 getDrift(double x, double z, float time) {
-        float dx = (float) (Math.sin(time * 0.01 + x * 0.3 + z * 0.1) * 0.35);
-        float dz = (float) (Math.cos(time * 0.008 + x * 0.1 - z * 0.3) * 0.35);
+        float dx = (float) (Math.sin(time * 0.01 + x * 0.3 + z * 0.1) * FogConfig.DRIFT_AMPLITUDE);
+        float dz = (float) (Math.cos(time * 0.008 + x * 0.1 - z * 0.3) * FogConfig.DRIFT_AMPLITUDE);
         return new Vec2(dx, dz);
     }
 

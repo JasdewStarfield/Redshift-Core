@@ -9,6 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -28,6 +29,7 @@ public class FogEventHandler {
             ResourceLocation.fromNamespaceAndPath("redshift", "aerosol_mangroves_edge"));
 
     private static float currentFogWeight = 0.0f;
+    private static float smoothedTargetWeight = 0.0f;
     private static long lastTime = 0;
 
     public static float getCurrentFogWeight() {
@@ -38,29 +40,36 @@ public class FogEventHandler {
     public static void onRenderFog(ViewportEvent.RenderFog event) {
         Entity entity = event.getCamera().getEntity();
         Level level = entity.level();
-        BlockPos pos = entity.blockPosition();
-        Holder<Biome> biomeHolder = level.getBiome(pos);
 
-        float targetWeight = calculateSampledTargetWeight(level, entity);
+        float rawSample = calculateSampledTargetWeight(level, entity);
 
         long currentTime = System.currentTimeMillis();
         if (lastTime == 0) {
             lastTime = currentTime;
             // 初始加载瞬间完成
-            currentFogWeight = targetWeight;
+            currentFogWeight = rawSample;
+            smoothedTargetWeight = rawSample;
         }
         float dt = (currentTime - lastTime) / 1000.0f;
         lastTime = currentTime;
 
-        float diff = Math.abs(targetWeight - currentFogWeight);
+        // 低通滤波平滑处理
+        float smoothingFactor = dt * FogConfig.SAMPLING_SMOOTHING_SPEED;
+        smoothingFactor = Mth.clamp(smoothingFactor, 0.0f, 1.0f);
+
+        smoothedTargetWeight = Mth.lerp(smoothingFactor, smoothedTargetWeight, rawSample);
+
+        float targetForRender = smoothedTargetWeight;
+
+        float diff = Math.abs(targetForRender - currentFogWeight);
         float transitionSpeed = 0.8f * dt;
 
         if (diff > 0.5f) transitionSpeed *= 2.0f;
 
-        if (currentFogWeight < targetWeight) {
-            currentFogWeight = Math.min(currentFogWeight + transitionSpeed, targetWeight);
-        } else if (currentFogWeight > targetWeight) {
-            currentFogWeight = Math.max(currentFogWeight - transitionSpeed, targetWeight);
+        if (currentFogWeight < targetForRender) {
+            currentFogWeight = Math.min(currentFogWeight + transitionSpeed, targetForRender);
+        } else if (currentFogWeight > targetForRender) {
+            currentFogWeight = Math.max(currentFogWeight - transitionSpeed, targetForRender);
         }
 
         if (currentFogWeight > 0.01f) {
@@ -79,6 +88,58 @@ public class FogEventHandler {
             event.setFarPlaneDistance(farPlaneDistance);
             event.setCanceled(true);
         }
+    }
+
+    @SubscribeEvent
+    public static void onComputeFogColor(ViewportEvent.ComputeFogColor event) {
+        // 如果不在雾气范围内，直接返回，使用原版逻辑
+        if (currentFogWeight <= 0.001f) {
+            return;
+        }
+
+        Entity entity = event.getCamera().getEntity();
+        Level level = entity.level();
+        BlockPos pos = entity.blockPosition();
+
+        // 1. 定义固定颜色
+        float baseR = FogConfig.FOG_COLOR_R;
+        float baseG = FogConfig.FOG_COLOR_G;
+        float baseB = FogConfig.FOG_COLOR_B;
+
+        int blockLight = level.getBrightness(LightLayer.BLOCK, pos);
+        int skyLight = level.getBrightness(LightLayer.SKY, pos);
+
+        int adjustedSky = skyLight - level.getSkyDarken();
+        if (adjustedSky > 0) {
+            float sunAngle = level.getSunAngle(1.0F);
+            float targetAngle = sunAngle < (float) Math.PI ? 0.0F : (float) (Math.PI * 2);
+            sunAngle += (targetAngle - sunAngle) * 0.2F;
+            adjustedSky = Math.round(adjustedSky * Mth.cos(sunAngle));
+        }
+
+        int adjustedSkyLight = Mth.clamp(adjustedSky, FogConfig.MIN_MOONLIGHT, 15);
+
+        float maxLight = Math.max(blockLight, adjustedSkyLight) / 15.0f;
+        float lightIntensity = Mth.lerp(maxLight, FogConfig.MIN_BRIGHTNESS, 1.0f);
+
+        // 2. 获取当前原版计算出的颜色（会随时间变红/变黑）
+        float originalR = event.getRed();
+        float originalG = event.getGreen();
+        float originalB = event.getBlue();
+
+        float targetR = baseR * lightIntensity;
+        float targetG = baseG * lightIntensity;
+        float targetB = baseB * lightIntensity;
+
+        // 3. 混合颜色
+        float finalR = Mth.lerp(currentFogWeight, originalR, targetR);
+        float finalG = Mth.lerp(currentFogWeight, originalG, targetG);
+        float finalB = Mth.lerp(currentFogWeight, originalB, targetB);
+
+        // 4. 应用新颜色
+        event.setRed(finalR);
+        event.setGreen(finalG);
+        event.setBlue(finalB);
     }
 
     private static float calculateSampledTargetWeight(Level level, Entity entity) {
