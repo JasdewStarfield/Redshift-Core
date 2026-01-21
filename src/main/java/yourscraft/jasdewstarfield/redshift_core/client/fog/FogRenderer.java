@@ -32,7 +32,7 @@ public class FogRenderer {
 
     private static final ByteBufferBuilder BUFFER_BUILDER = new ByteBufferBuilder(2048);
 
-    private static final int MIN_BRIGHTNESS = 4;
+    private static final float MIN_BRIGHTNESS = 0.1f;
 
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
@@ -111,7 +111,6 @@ public class FogRenderer {
                 // 光照计算
                 int blockLight = mc.level.getBrightness(LightLayer.BLOCK, checkPos);
                 int skyLight = mc.level.getBrightness(LightLayer.SKY, checkPos);
-                blockLight = Math.max(blockLight, MIN_BRIGHTNESS);
 
                 int packedLight = LightTexture.pack(blockLight, skyLight);
 
@@ -136,7 +135,7 @@ public class FogRenderer {
                 if (fade <= 0.01f) continue;
 
                 float proximityFade = 1.0f;
-                if (immersion > 0.05f) {
+                if (immersion > 0.0001f) {
                     proximityFade = (float) Mth.clamp((dist - 5.0) / 7.0, 0.0, 1.0);
                     proximityFade = Mth.lerp(immersion, 1.0f, proximityFade);
                 }
@@ -154,7 +153,8 @@ public class FogRenderer {
     }
 
     private static void drawFogCube(PoseStack poseStack, VertexConsumer buffer, double x, float topY, double z, float alpha, float time, float size, int packedLight) {
-        float bottomY = topY - 2.0f;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;float bottomY = topY - 2.0f;
 
         float eps = 0.05f;
         float minX = (float)x + eps;
@@ -163,9 +163,34 @@ public class FogRenderer {
         float maxZ = (float)z + size - eps;
 
         // 基础颜色
-        float r = 0.65f;
-        float g = 0.75f;
-        float b = 0.45f;
+        float baseR = 0.65f;
+        float baseG = 0.75f;
+        float baseB = 0.45f;
+
+        int blockLight = LightTexture.block(packedLight);
+        int skyLight = LightTexture.sky(packedLight);
+        float skyDarken = mc.level.getSkyDarken(1.0f);
+        int adjustedSky = skyLight - mc.level.getSkyDarken();
+
+        if (adjustedSky > 0) {
+            float sunAngle = mc.level.getSunAngle(1.0F);
+            float targetAngle = sunAngle < (float) Math.PI ? 0.0F : (float) (Math.PI * 2);
+            sunAngle += (targetAngle - sunAngle) * 0.2F;
+            adjustedSky = Math.round(adjustedSky * Mth.cos(sunAngle));
+        }
+
+        int minMoonlight = 6;
+
+        int adjustedSkyLight = Mth.clamp(adjustedSky, minMoonlight, 15);
+
+        float maxLight = Math.max(blockLight, adjustedSkyLight) / 15.0f;
+        float lightIntensity = Mth.lerp(maxLight, MIN_BRIGHTNESS, 1.0f);
+
+        float r = baseR * lightIntensity;
+        float g = baseG * lightIntensity;
+        float b = baseB * lightIntensity;
+
+        int fullBright = LightTexture.FULL_BRIGHT;
 
         Matrix4f mat = poseStack.last().pose();
 
@@ -179,38 +204,38 @@ public class FogRenderer {
         float v2 = (float) ((z + size) / texScale + time * 0.5f);
 
         // --- 1. 顶面 (Top Face) ---
-        buffer.addVertex(mat, minX, topY, minZ).setColor(r, g, b, alpha).setUv(u1, v1).setLight(packedLight);
-        buffer.addVertex(mat, minX, topY, maxZ).setColor(r, g, b, alpha).setUv(u1, v2).setLight(packedLight);
-        buffer.addVertex(mat, maxX, topY, maxZ).setColor(r, g, b, alpha).setUv(u2, v2).setLight(packedLight);
-        buffer.addVertex(mat, maxX, topY, minZ).setColor(r, g, b, alpha).setUv(u2, v1).setLight(packedLight);
+        buffer.addVertex(mat, minX, topY, minZ).setColor(r, g, b, alpha).setUv(u1, v1).setLight(fullBright);
+        buffer.addVertex(mat, minX, topY, maxZ).setColor(r, g, b, alpha).setUv(u1, v2).setLight(fullBright);
+        buffer.addVertex(mat, maxX, topY, maxZ).setColor(r, g, b, alpha).setUv(u2, v2).setLight(fullBright);
+        buffer.addVertex(mat, maxX, topY, minZ).setColor(r, g, b, alpha).setUv(u2, v1).setLight(fullBright);
 
         // 侧面的 Alpha 可以稍微低一点，模拟气体边缘的稀薄感
-        float sideAlphaTop = alpha * 0.6f;
+        float sideAlphaTop = alpha;
         float sideAlphaBottom = 0.0f;
 
         // 北面 (Z-)
-        buffer.addVertex(mat, maxX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(packedLight);
-        buffer.addVertex(mat, maxX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(packedLight);
-        buffer.addVertex(mat, minX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(packedLight);
-        buffer.addVertex(mat, minX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(packedLight);
+        buffer.addVertex(mat, maxX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(fullBright);
+        buffer.addVertex(mat, maxX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(fullBright);
+        buffer.addVertex(mat, minX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(fullBright);
+        buffer.addVertex(mat, minX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(fullBright);
 
         // 南面 (Z+)
-        buffer.addVertex(mat, minX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(packedLight);
-        buffer.addVertex(mat, minX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(packedLight);
-        buffer.addVertex(mat, maxX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(packedLight);
-        buffer.addVertex(mat, maxX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(packedLight);
+        buffer.addVertex(mat, minX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(fullBright);
+        buffer.addVertex(mat, minX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(fullBright);
+        buffer.addVertex(mat, maxX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(fullBright);
+        buffer.addVertex(mat, maxX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(fullBright);
 
         // 西面 (X-)
-        buffer.addVertex(mat, minX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(packedLight);
-        buffer.addVertex(mat, minX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(packedLight);
-        buffer.addVertex(mat, minX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(packedLight);
-        buffer.addVertex(mat, minX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(packedLight);
+        buffer.addVertex(mat, minX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(fullBright);
+        buffer.addVertex(mat, minX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(fullBright);
+        buffer.addVertex(mat, minX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(fullBright);
+        buffer.addVertex(mat, minX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(fullBright);
 
         // 东面 (X+)
-        buffer.addVertex(mat, maxX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(packedLight);
-        buffer.addVertex(mat, maxX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(packedLight);
-        buffer.addVertex(mat, maxX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(packedLight);
-        buffer.addVertex(mat, maxX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(packedLight);
+        buffer.addVertex(mat, maxX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(fullBright);
+        buffer.addVertex(mat, maxX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(fullBright);
+        buffer.addVertex(mat, maxX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(fullBright);
+        buffer.addVertex(mat, maxX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(fullBright);
     }
 
     // 辅助方法：计算区块中心坐标
