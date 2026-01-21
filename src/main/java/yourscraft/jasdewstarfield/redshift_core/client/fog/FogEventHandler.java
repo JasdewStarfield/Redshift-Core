@@ -2,46 +2,30 @@ package yourscraft.jasdewstarfield.redshift_core.client.fog;
 
 import net.minecraft.client.renderer.FogRenderer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
-import net.minecraft.world.level.biome.Biome;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ViewportEvent;
 import yourscraft.jasdewstarfield.redshift_core.RedshiftCore;
+import yourscraft.jasdewstarfield.redshift_core.common.FogLogic;
 
 @EventBusSubscriber(modid = RedshiftCore.MODID, value = Dist.CLIENT)
 public class FogEventHandler {
 
-    public static final ResourceKey<Biome> AEROSOL_MANGROVES = ResourceKey.create(
-            Registries.BIOME,
-            ResourceLocation.fromNamespaceAndPath("redshift", "aerosol_mangroves"));
-
-    public static final ResourceKey<Biome> AEROSOL_MANGROVES_EDGE = ResourceKey.create(
-            Registries.BIOME,
-            ResourceLocation.fromNamespaceAndPath("redshift", "aerosol_mangroves_edge"));
-
     private static float currentFogWeight = 0.0f;
     private static float smoothedTargetWeight = 0.0f;
     private static long lastTime = 0;
-
-    public static float getCurrentFogWeight() {
-        return currentFogWeight;
-    }
 
     @SubscribeEvent
     public static void onRenderFog(ViewportEvent.RenderFog event) {
         Entity entity = event.getCamera().getEntity();
         Level level = entity.level();
 
-        float rawSample = calculateSampledTargetWeight(level, entity);
+        float rawSample = FogLogic.getFogIntensity(level, event.getCamera().getPosition());
 
         long currentTime = System.currentTimeMillis();
         if (lastTime == 0) {
@@ -140,50 +124,6 @@ public class FogEventHandler {
         event.setRed(finalR);
         event.setGreen(finalG);
         event.setBlue(finalB);
-    }
-
-    private static float calculateSampledTargetWeight(Level level, Entity entity) {
-        // 1. 垂直高度衰减
-        double y = entity.getY();
-        float verticalFactor = 1.0f;
-
-        if (y > 75) return 0.0f; // 太高了，完全没雾
-        if (y > 63) {
-            verticalFactor = 1.0f - (float)((y - 63) / 12.0);
-            verticalFactor = Mth.clamp(verticalFactor, 0.0f, 1.0f);
-        }
-
-        // 2. 水平采样 (Horizontal Sampling)
-        // 扫描以玩家为中心，半径 32 格内的生物群系分布
-        // 网格: 5x5, 步长 16格 (-32, -16, 0, 16, 32)
-        BlockPos playerPos = entity.blockPosition();
-        int radius = 32;
-        int step = 16;
-        float totalWeight = 0f;
-        int sampleCount = 0;
-
-        for (int x = -radius; x <= radius; x += step) {
-            for (int z = -radius; z <= radius; z += step) {
-                sampleCount++;
-
-                // 采样点坐标
-                BlockPos samplePos = playerPos.offset(x, 0, z);
-                Holder<Biome> b = level.getBiome(new BlockPos(samplePos.getX(), 60, samplePos.getZ()));
-
-                if (b.is(AEROSOL_MANGROVES)) {
-                    totalWeight += 1.0f; // 核心区贡献满分
-                } else if (b.is(AEROSOL_MANGROVES_EDGE)) {
-                    totalWeight += 0.4f; // 边缘区贡献低分
-                }
-            }
-        }
-
-        // 计算平均密度
-        float density = totalWeight / sampleCount;
-
-        density = Mth.clamp(density * 1.2f, 0.0f, 1.0f);
-
-        return density * verticalFactor;
     }
 
     private static void applyFogSettings(ViewportEvent.RenderFog event, Level level, float weight) {

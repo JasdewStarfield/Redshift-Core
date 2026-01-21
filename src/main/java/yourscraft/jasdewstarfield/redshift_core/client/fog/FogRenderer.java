@@ -17,6 +17,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
 import yourscraft.jasdewstarfield.redshift_core.client.RedshiftRenderTypes;
+import yourscraft.jasdewstarfield.redshift_core.common.FogLogic;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,7 +65,7 @@ public class FogRenderer {
 
         double maxDist = (FogConfig.RENDER_DISTANCE_CHUNKS - 1) * 16.0;
 
-        float immersion = FogEventHandler.getCurrentFogWeight();
+        float edgeExpansion = FogLogic.getEdgeExpansionFactor(mc.level);
 
         // 区块排序
         List<Map.Entry<Long, FogGenerator.FogChunkData>> sortedChunks = new ArrayList<>(generator.getVisibleChunks().entrySet());
@@ -106,6 +107,16 @@ public class FogRenderer {
                     continue;
                 }
 
+                // 计算基于类型的透明度乘数
+                float typeMultiplier = 1.0f;
+                if (point.type() == FogLogic.FogType.EDGE) {
+                    typeMultiplier = edgeExpansion; // 边缘区随时间变化
+                    if (typeMultiplier < 0.1f) typeMultiplier = 0.0f;
+                }
+
+                // 如果透明度为0，直接不画
+                if (typeMultiplier <= 0.001f) continue;
+
                 // 光照计算
                 int blockLight = mc.level.getBrightness(LightLayer.BLOCK, checkPos);
                 int skyLight = mc.level.getBrightness(LightLayer.SKY, checkPos);
@@ -132,14 +143,11 @@ public class FogRenderer {
                 float fade = computeFade((float)wx, (float)wz, (float)cameraPos.x, (float)cameraPos.z, maxDist);
                 if (fade <= 0.01f) continue;
 
-                float proximityFade = 1.0f;
-                if (immersion > 0.0001f) {
-                    proximityFade = (float) Mth.clamp((dist - 5.0) / 7.0, 0.0, 1.0);
-                    proximityFade = Mth.lerp(immersion, 1.0f, proximityFade);
-                }
+                // 靠近淡出
+                float proximityFade = (float) Mth.clamp((dist - 4.0) / 8.0, 0.0, 1.0);
 
                 // 最终透明度
-                float finalAlpha = point.alpha() * fade * proximityFade;
+                float finalAlpha = point.alpha() * fade * proximityFade * typeMultiplier;
 
                 drawFogCube(poseStack, buffer, driftedX, (float) driftedY, driftedZ, finalAlpha, flowTime, currentSize, packedLight);
             }

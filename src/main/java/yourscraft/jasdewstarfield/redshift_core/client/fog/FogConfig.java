@@ -20,8 +20,11 @@ public class FogConfig {
     public static final float SAMPLING_SMOOTHING_SPEED = 2.0f;
 
     // --- 体积雾 ---
-    // 基础高度：海平面
+    // 基础高度：海平面之下
     public static final float FOG_HEIGHT = 60.5f;
+
+    // 淡化高度范围
+    public static final float FADE_RANGE = 12f;
 
     // 雾气厚度范围 (Y轴波动)
     public static final float Y_RANGE = 2.0f;

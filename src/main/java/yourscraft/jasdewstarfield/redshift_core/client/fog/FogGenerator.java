@@ -2,10 +2,8 @@ package yourscraft.jasdewstarfield.redshift_core.client.fog;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.phys.Vec3;
+import yourscraft.jasdewstarfield.redshift_core.common.FogLogic;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +21,7 @@ public class FogGenerator {
     private final ConcurrentHashMap<Long, Boolean> processingChunks = new ConcurrentHashMap<>();
 
     // 简单的记录类，存储雾气点相对于 Chunk 的位置和透明度
-    public record FogPoint(float x, float yOffset, float z, float alpha, boolean isEdge) {}
+    public record FogPoint(float x, float yOffset, float z, float alpha, FogLogic.FogType type) {}
     public record FogChunkData(List<FogPoint> points, int voxelSize) {}
 
     public FogGenerator() {
@@ -93,24 +91,22 @@ public class FogGenerator {
                     int offset = step / 2;
                     BlockPos checkPos = new BlockPos(worldX + offset, 63, worldZ + offset);
 
-                    Holder<Biome> biomeHolder = minecraft.level.getBiome(checkPos);
-                    boolean isCore = biomeHolder.is(ResourceLocation.fromNamespaceAndPath("redshift", "aerosol_mangroves"));
-                    boolean isEdge = biomeHolder.is(ResourceLocation.fromNamespaceAndPath("redshift", "aerosol_mangroves_edge"));
-
-                    if (!isCore && !isEdge) continue;
-
-                    float density = sampler.sample(worldX + offset, worldZ + offset, noiseTimeOffset);
+                    float density = sampler.sample(checkPos.getX(), checkPos.getZ(), noiseTimeOffset);
 
                     if (density > 0) {
+                        FogLogic.FogType type = FogLogic.getFogTypeAt(minecraft.level, checkPos.getX(), checkPos.getZ());
+
+                        if (type == FogLogic.FogType.NONE) continue;
+
                         float yOffset = density * FogConfig.Y_RANGE;
                         float alpha = density;
 
-                        if (isEdge) {
+                        if (type == FogLogic.FogType.EDGE) {
                             yOffset *= 0.4f;
                             alpha *= 0.6f;
                         }
 
-                        points.add(new FogPoint(x, yOffset, z, alpha, isEdge));
+                        points.add(new FogPoint(x, yOffset, z, alpha, type));
                     }
                 }
             }
