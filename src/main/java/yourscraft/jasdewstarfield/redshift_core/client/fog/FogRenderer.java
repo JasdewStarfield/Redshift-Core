@@ -1,18 +1,25 @@
 package yourscraft.jasdewstarfield.redshift_core.client.fog;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
+import yourscraft.jasdewstarfield.redshift_core.client.RedshiftRenderTypes;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @EventBusSubscriber(value = Dist.CLIENT)
@@ -23,7 +30,9 @@ public class FogRenderer {
 
     private static final FogGenerator generator = new FogGenerator();
 
-    private static final float MIN_BRIGHTNESS = 0.25f;
+    private static final ByteBufferBuilder BUFFER_BUILDER = new ByteBufferBuilder(2048);
+
+    private static final int MIN_BRIGHTNESS = 4;
 
     @SubscribeEvent
     public static void onRenderLevel(RenderLevelStageEvent event) {
@@ -43,23 +52,11 @@ public class FogRenderer {
         // 2. 准备渲染状态
         PoseStack poseStack = event.getPoseStack();
         poseStack.pushPose();
-
         // 抵消摄像机移动，因为我们要在绝对世界坐标渲染
         poseStack.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
 
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.enableDepthTest();
-        RenderSystem.depthMask(false);
-        RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
-        RenderSystem.setShaderTexture(0, FOG_TEXTURE);
-        RenderSystem.disableCull();
-
-        Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder buffer = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
-
-        // 光照计算
-        float worldBrightness = calculateWorldBrightness(mc, partialTick);
+        MultiBufferSource.BufferSource bufferSource = MultiBufferSource.immediate(BUFFER_BUILDER);
+        VertexConsumer buffer = bufferSource.getBuffer(RedshiftRenderTypes.getFog(FOG_TEXTURE));
 
         double smoothTime = gameTime + partialTick;
         // 纹理流动时间
@@ -71,8 +68,18 @@ public class FogRenderer {
 
         float immersion = FogEventHandler.getCurrentFogWeight();
 
+        // 区块排序
+        List<Map.Entry<Long, FogGenerator.FogChunkData>> sortedChunks = new ArrayList<>(generator.getVisibleChunks().entrySet());
+        sortedChunks.sort((e1, e2) -> {
+            Vec3 center1 = getChunkCenter(e1.getKey());
+            Vec3 center2 = getChunkCenter(e2.getKey());
+            double d1 = center1.distanceToSqr(cameraPos);
+            double d2 = center2.distanceToSqr(cameraPos);
+            return Double.compare(d2, d1); // d2 > d1 则返回正数，d2 排前面
+        });
+
         // 3. 遍历所有 Chunk 并绘制
-        for (Map.Entry<Long, FogGenerator.FogChunkData> entry : generator.getVisibleChunks().entrySet()) {
+        for (Map.Entry<Long, FogGenerator.FogChunkData> entry : sortedChunks) {
             long chunkPos = entry.getKey();
             FogGenerator.FogChunkData data = entry.getValue();
             int chunkX = (int) (chunkPos & 0xFFFFFFFFL);
@@ -82,11 +89,46 @@ public class FogRenderer {
 
             float currentSize = data.voxelSize();
 
-            for (FogGenerator.FogPoint point : data.points()) {
+            // 区块内点排序
+            List<FogGenerator.FogPoint> sortedPoints = new ArrayList<>(data.points());
+            sortedPoints.sort((p1, p2) -> {
+                double distSq1 = getDistSq(worldChunkX, worldChunkZ, p1, cameraPos);
+                double distSq2 = getDistSq(worldChunkX, worldChunkZ, p2, cameraPos);
+                return Double.compare(distSq2, distSq1); // 降序
+            });
+
+            for (FogGenerator.FogPoint point : sortedPoints) {
                 double wx = worldChunkX + point.x();
                 double wz = worldChunkZ + point.z();
 
-                double distSq = (wx - cameraPos.x) * (wx - cameraPos.x) + (wz - cameraPos.z) * (wz - cameraPos.z);
+                BlockPos checkPos = BlockPos.containing(wx + currentSize / 2.0, FogConfig.FOG_HEIGHT, wz + currentSize / 2.0);
+                BlockState state = mc.level.getBlockState(checkPos);
+
+                if (state.isSuffocating(mc.level, checkPos)) {
+                    continue;
+                }
+
+                // 光照计算
+                int blockLight = mc.level.getBrightness(LightLayer.BLOCK, checkPos);
+                int skyLight = mc.level.getBrightness(LightLayer.SKY, checkPos);
+                blockLight = Math.max(blockLight, MIN_BRIGHTNESS);
+
+                int packedLight = LightTexture.pack(blockLight, skyLight);
+
+                // 垂直呼吸
+                float localBreathing = getComplexBreathing(wx, wz, breathingTime);
+                double driftedY = FogConfig.FOG_HEIGHT + point.yOffset() + localBreathing;
+
+                // 水平漂移
+                Vec2 drift = getDrift(wx, wz, (float)smoothTime);
+                double driftedX = wx + drift.x;
+                double driftedZ = wz + drift.y;
+
+                double distSq = (driftedX - cameraPos.x) * (driftedX - cameraPos.x) +
+                        (driftedY - cameraPos.y) * (driftedY - cameraPos.y) +
+                        (driftedZ - cameraPos.z) * (driftedZ - cameraPos.z);
+
+                if (distSq > maxDist * maxDist) continue;
                 double dist = Math.sqrt(distSq);
 
                 // 距离淡出
@@ -99,25 +141,91 @@ public class FogRenderer {
                     proximityFade = Mth.lerp(immersion, 1.0f, proximityFade);
                 }
 
-                // 垂直动画：给每个方块加一个基于位置的相位，让它们不是同步升降，而是波浪式升降
-                float localBreathing = getComplexBreathing(wx, wz, breathingTime);
-
+                // 最终透明度
                 float finalAlpha = point.alpha() * fade * proximityFade;
 
-                drawFogCube(poseStack, buffer, wx, point.yOffset() + localBreathing, wz, finalAlpha, flowTime, currentSize, worldBrightness);
+                drawFogCube(poseStack, buffer, driftedX, (float) driftedY, driftedZ, finalAlpha, flowTime, currentSize, packedLight);
             }
         }
 
         // 提交绘制
-        MeshData mesh = buffer.build();
-        if (mesh != null) {
-            BufferUploader.drawWithShader(mesh);
-        }
-
-        RenderSystem.enableCull();
-        RenderSystem.depthMask(true);
-        RenderSystem.disableBlend();
+        bufferSource.endBatch();
         poseStack.popPose();
+    }
+
+    private static void drawFogCube(PoseStack poseStack, VertexConsumer buffer, double x, float topY, double z, float alpha, float time, float size, int packedLight) {
+        float bottomY = topY - 2.0f;
+
+        float eps = 0.05f;
+        float minX = (float)x + eps;
+        float maxX = (float)x + size - eps;
+        float minZ = (float)z + eps;
+        float maxZ = (float)z + size - eps;
+
+        // 基础颜色
+        float r = 0.65f;
+        float g = 0.75f;
+        float b = 0.45f;
+
+        Matrix4f mat = poseStack.last().pose();
+
+        // 纹理缩放 (控制纹理在方块上的疏密)
+        float texScale = 32.0f;
+
+        // UV 计算 (基于世界坐标 + 时间流动)
+        float u1 = (float) (x / texScale + time);
+        float u2 = (float) ((x + size) / texScale + time);
+        float v1 = (float) (z / texScale + time * 0.5f);
+        float v2 = (float) ((z + size) / texScale + time * 0.5f);
+
+        // --- 1. 顶面 (Top Face) ---
+        buffer.addVertex(mat, minX, topY, minZ).setColor(r, g, b, alpha).setUv(u1, v1).setLight(packedLight);
+        buffer.addVertex(mat, minX, topY, maxZ).setColor(r, g, b, alpha).setUv(u1, v2).setLight(packedLight);
+        buffer.addVertex(mat, maxX, topY, maxZ).setColor(r, g, b, alpha).setUv(u2, v2).setLight(packedLight);
+        buffer.addVertex(mat, maxX, topY, minZ).setColor(r, g, b, alpha).setUv(u2, v1).setLight(packedLight);
+
+        // 侧面的 Alpha 可以稍微低一点，模拟气体边缘的稀薄感
+        float sideAlphaTop = alpha * 0.6f;
+        float sideAlphaBottom = 0.0f;
+
+        // 北面 (Z-)
+        buffer.addVertex(mat, maxX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(packedLight);
+        buffer.addVertex(mat, maxX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(packedLight);
+        buffer.addVertex(mat, minX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(packedLight);
+        buffer.addVertex(mat, minX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(packedLight);
+
+        // 南面 (Z+)
+        buffer.addVertex(mat, minX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(packedLight);
+        buffer.addVertex(mat, minX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(packedLight);
+        buffer.addVertex(mat, maxX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(packedLight);
+        buffer.addVertex(mat, maxX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(packedLight);
+
+        // 西面 (X-)
+        buffer.addVertex(mat, minX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(packedLight);
+        buffer.addVertex(mat, minX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(packedLight);
+        buffer.addVertex(mat, minX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(packedLight);
+        buffer.addVertex(mat, minX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(packedLight);
+
+        // 东面 (X+)
+        buffer.addVertex(mat, maxX, topY, maxZ).setColor(r, g, b, sideAlphaTop).setUv(u2, v1).setLight(packedLight);
+        buffer.addVertex(mat, maxX, bottomY, maxZ).setColor(r, g, b, sideAlphaBottom).setUv(u2, v2).setLight(packedLight);
+        buffer.addVertex(mat, maxX, bottomY, minZ).setColor(r, g, b, sideAlphaBottom).setUv(u1, v2).setLight(packedLight);
+        buffer.addVertex(mat, maxX, topY, minZ).setColor(r, g, b, sideAlphaTop).setUv(u1, v1).setLight(packedLight);
+    }
+
+    // 辅助方法：计算区块中心坐标
+    private static Vec3 getChunkCenter(long chunkPos) {
+        int chunkX = (int) (chunkPos & 0xFFFFFFFFL);
+        int chunkZ = (int) (chunkPos >>> 32);
+        return new Vec3(chunkX * 16 + 8, 60, chunkZ * 16 + 8);
+    }
+
+    // 辅助方法：计算点到摄像机的距离平方
+    private static double getDistSq(double worldChunkX, double worldChunkZ, FogGenerator.FogPoint p, Vec3 cam) {
+        double wx = worldChunkX + p.x();
+        double wz = worldChunkZ + p.z();
+        double wy = FogConfig.FOG_HEIGHT + p.yOffset();
+        return (wx - cam.x) * (wx - cam.x) + (wy - cam.y) * (wy - cam.y) + (wz - cam.z) * (wz - cam.z);
     }
 
     private static float getComplexBreathing(double x, double z, float time) {
@@ -135,93 +243,10 @@ public class FogRenderer {
         return (wave1 + wave2 * 0.5f + randomPhase * 0.2f) * FogConfig.BREATHING_AMPLITUDE;
     }
 
-    private static float calculateWorldBrightness(Minecraft mc, float partialTick) {
-        if (mc.level == null) return 1.0f;
-
-        // 1. 获取太阳角度
-        float sunAngle = mc.level.getSunAngle(partialTick);
-        // cos(0) = 1 (Day), cos(pi) = -1 (Night). 映射到 0~1
-        float dayLight = Mth.cos(sunAngle) * 0.5f + 0.5f;
-        dayLight = Mth.clamp(dayLight, 0.0f, 1.0f);
-
-        // 2. 考虑天气
-        float rain = mc.level.getRainLevel(partialTick);
-        float thunder = mc.level.getThunderLevel(partialTick);
-
-        // 雨天最多降低 20% 亮度，雷暴最多降低 50%
-        dayLight *= (1.0f - rain * 0.2f);
-        dayLight *= (1.0f - thunder * 0.5f);
-
-        // 3. 混合最小亮度 (保留夜间荧光感)
-        return MIN_BRIGHTNESS + (1.0f - MIN_BRIGHTNESS) * dayLight;
-    }
-
-    private static void drawFogCube(PoseStack poseStack, BufferBuilder buffer, double x, float yOffset, double z, float alpha, float time, float size, float brightness) {
-        // 雾气顶部高度
-        float topY = FogConfig.FOG_HEIGHT + yOffset;
-        // 雾气底部高度 (固定在海平面以下一点，或者根据 topY 向下延伸一个固定厚度)
-        float bottomY = FogConfig.FOG_HEIGHT - 2.0f;
-
-        float eps = 0.01f;
-        float minX = (float)x + eps;
-        float maxX = (float)x + size - eps;
-        float minZ = (float)z + eps;
-        float maxZ = (float)z + size - eps;
-
-        // 基础颜色
-        float baseR = 0.65f;
-        float baseG = 0.75f;
-        float baseB = 0.45f;
-
-        // 应用亮度乘数
-        float r = baseR * brightness;
-        float g = baseG * brightness;
-        float b = baseB * brightness;
-
-        Matrix4f mat = poseStack.last().pose();
-
-        // 纹理缩放 (控制纹理在方块上的疏密)
-        float texScale = 32.0f;
-
-        // UV 计算 (基于世界坐标 + 时间流动)
-        float u1 = (float) (x / texScale + time);
-        float u2 = (float) ((x + size) / texScale + time);
-        float v1 = (float) (z / texScale + time * 0.5f);
-        float v2 = (float) ((z + size) / texScale + time * 0.5f);
-
-        // --- 1. 顶面 (Top Face) ---
-        buffer.addVertex(mat, (float)x, topY, (float)z).setUv(u1, v1).setColor(r, g, b, alpha);
-        buffer.addVertex(mat, (float)x, topY, (float)z + size).setUv(u1, v2).setColor(r, g, b, alpha);
-        buffer.addVertex(mat, (float)x + size, topY, (float)z + size).setUv(u2, v2).setColor(r, g, b, alpha);
-        buffer.addVertex(mat, (float)x + size, topY, (float)z).setUv(u2, v1).setColor(r, g, b, alpha);
-
-        // 侧面的 Alpha 可以稍微低一点，模拟气体边缘的稀薄感
-        float sideAlphaTop = alpha * 0.6f;
-        float sideAlphaBottom = 0.0f;
-
-        // 北面 (Z-)
-        buffer.addVertex(mat, maxX, topY, minZ).setUv(u2, v1).setColor(r, g, b, sideAlphaTop);
-        buffer.addVertex(mat, maxX, bottomY, minZ).setUv(u2, v2).setColor(r, g, b, sideAlphaBottom);
-        buffer.addVertex(mat, minX, bottomY, minZ).setUv(u1, v2).setColor(r, g, b, sideAlphaBottom);
-        buffer.addVertex(mat, minX, topY, minZ).setUv(u1, v1).setColor(r, g, b, sideAlphaTop);
-
-        // 南面 (Z+)
-        buffer.addVertex(mat, minX, topY, maxZ).setUv(u1, v1).setColor(r, g, b, sideAlphaTop);
-        buffer.addVertex(mat, minX, bottomY, maxZ).setUv(u1, v2).setColor(r, g, b, sideAlphaBottom);
-        buffer.addVertex(mat, maxX, bottomY, maxZ).setUv(u2, v2).setColor(r, g, b, sideAlphaBottom);
-        buffer.addVertex(mat, maxX, topY, maxZ).setUv(u2, v1).setColor(r, g, b, sideAlphaTop);
-
-        // 西面 (X-)
-        buffer.addVertex(mat, minX, topY, minZ).setUv(u1, v1).setColor(r, g, b, sideAlphaTop);
-        buffer.addVertex(mat, minX, bottomY, minZ).setUv(u1, v2).setColor(r, g, b, sideAlphaBottom);
-        buffer.addVertex(mat, minX, bottomY, maxZ).setUv(u2, v2).setColor(r, g, b, sideAlphaBottom);
-        buffer.addVertex(mat, minX, topY, maxZ).setUv(u2, v1).setColor(r, g, b, sideAlphaTop);
-
-        // 东面 (X+)
-        buffer.addVertex(mat, maxX, topY, maxZ).setUv(u2, v1).setColor(r, g, b, sideAlphaTop);
-        buffer.addVertex(mat, maxX, bottomY, maxZ).setUv(u2, v2).setColor(r, g, b, sideAlphaBottom);
-        buffer.addVertex(mat, maxX, bottomY, minZ).setUv(u1, v2).setColor(r, g, b, sideAlphaBottom);
-        buffer.addVertex(mat, maxX, topY, minZ).setUv(u1, v1).setColor(r, g, b, sideAlphaTop);
+    private static Vec2 getDrift(double x, double z, float time) {
+        float dx = (float) (Math.sin(time * 0.01 + x * 0.3 + z * 0.1) * 0.35);
+        float dz = (float) (Math.cos(time * 0.008 + x * 0.1 - z * 0.3) * 0.35);
+        return new Vec2(dx, dz);
     }
 
     private static float computeFade(float x, float z, float px, float pz, double maxDist) {
