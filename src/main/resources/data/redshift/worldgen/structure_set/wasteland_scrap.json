@@ -1,0 +1,14 @@
+{
+  "structures": [
+    {
+      "structure": "redshift:wasteland_scrap",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "minecraft:random_spread",
+    "spacing": 4,
+    "separation": 2,
+    "salt": 19901225
+  }
+}

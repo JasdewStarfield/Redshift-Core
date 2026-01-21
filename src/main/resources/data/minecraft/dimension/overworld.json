@@ -1,0 +1,148 @@
+{
+  "type": "minecraft:overworld",
+  "generator": {
+    "type": "minecraft:noise",
+    "settings": "redshift:planet_1",
+    "biome_source": {
+      "type": "minecraft:multi_noise",
+      "biomes": [
+        {
+          "//": "--- [气溶胶红树林] 变体1: 深层盆地 ---",
+          "biome": "redshift:aerosol_mangroves",
+          "parameters": {
+            "temperature": [-1.0, 1.0],
+            "humidity": [-1.0, 1.0],
+            "continentalness": [-1.2, -0.455],
+            "erosion": [-1.0, 1.0],
+            "weirdness": [-2.0, 2.0],
+            "depth": [0, 0],
+            "offset": 0
+          }
+        },
+        {
+          "//": "--- [气溶胶红树林] 变体2: 边缘浅滩 ---",
+          "biome": "redshift:aerosol_mangroves",
+          "parameters": {
+            "temperature": [-0.5, 1.0],
+            "humidity": [0.0, 1.0],
+            "continentalness": [-0.455, -0.19],
+            "erosion": [-1.0, 1.0],
+            "weirdness": [-2.0, 2.0],
+            "depth": [0, 0],
+            "offset": 0
+          }
+        },
+        {
+          "//": "--- [红树林边缘] ---",
+          "//_comment": "在 -0.12 到 -0.08 的狭长带生成过渡群系 (粗泥地表)",
+          "biome": "redshift:aerosol_mangroves_edge",
+          "parameters": {
+            "temperature": [-1.0, 1.0],
+            "humidity": [-0.5, 1.0],
+            "continentalness": [-0.19, -0.11],
+            "erosion": [-1.0, 1.0],
+            "weirdness": [-2.0, 0.6],
+            "depth": [0, 0],
+            "offset": 0
+          }
+        },
+        {
+          "//": "--- [泥泞河床]: 内陆泥浆河 ---",
+          "//_comment": "在陆地(> -0.04)的高侵蚀度区域(erosion > 0.4)且地势低洼处生成，模拟河道",
+          "biome": "redshift:muddy_riverbed",
+          "parameters": {
+            "temperature": [-1.0, 1.0],
+            "humidity": [-1.0, 1.0],
+            "continentalness": [-0.11, 1.0],
+            "erosion": [-1.0, 1.0],
+            "weirdness": [-0.05, 0.05],
+            "depth": [0, 0],
+            "offset": 0
+          }
+        },
+        {
+          "//": "--- [玄武岩管风琴] 变体1: 高耸尖峰 ---",
+          "biome": "redshift:basalt_organ",
+          "parameters": {
+            "temperature": [-1.0, 1.0],
+            "humidity": [-1.0, -0.2],
+            "continentalness": [-0.11, 1.5],
+            "erosion": [-1.0, -0.3],
+            "weirdness": [0.4, 2.0],
+            "depth": [0, 0],
+            "offset": 0
+          }
+        },
+        {
+          "//": "--- [玄武岩管风琴] 变体2: 干燥高原 ---",
+          "//_comment": "干燥且侵蚀度极低(极度崎岖)的区域",
+          "biome": "redshift:basalt_organ",
+          "parameters": {
+            "temperature": [0.0, 1.5],
+            "humidity": [-1.0, -0.5],
+            "continentalness": [0.2, 1.5],
+            "erosion": [-1.0, -0.6],
+            "weirdness": [0.05, 0.5],
+            "depth": [0, 0],
+            "offset": 0
+          }
+        },
+        {
+          "//": "--- [废土] 变体1: 标准平原 (左侧) ---",
+          "//_comment": "Weirdness 上限从 0.5 截断至 -0.05，避开河流左侧。",
+          "biome": "redshift:wasteland",
+          "parameters": {
+            "temperature": [-1.0, 1.0],
+            "humidity": [-0.2, 1.0],
+            "continentalness": [-0.11, 1.0],
+            "erosion": [-0.3, 1.0],
+            "weirdness": [-1.0, -0.05],
+            "depth": [0, 0],
+            "offset": 0
+          }
+        },
+        {
+          "//": "--- [废土] 变体1B: 标准平原 (右侧) ---",
+          "//_comment": "接管河流右侧 [0.05, 0.5] 的区域，确保河流两岸都有废土填充。",
+          "biome": "redshift:wasteland",
+          "parameters": {
+            "temperature": [-1.0, 1.0],
+            "humidity": [-0.2, 1.0],
+            "continentalness": [-0.11, 1.0],
+            "erosion": [-0.3, 1.0],
+            "weirdness": [0.05, 0.5],
+            "depth": [0, 0],
+            "offset": 0
+          }
+        },
+        {
+          "//": "--- [废土] 变体2: 湿润高地填补 ---",
+          "biome": "redshift:wasteland",
+          "parameters": {
+            "temperature": [-1.0, 1.0],
+            "humidity": [-0.2, 1.0],
+            "continentalness": [-0.11, 1.5],
+            "erosion": [-1.0, 1.0],
+            "weirdness": [0.5, 2.0],
+            "depth": [0, 0],
+            "offset": 0
+          }
+        },
+        {
+          "//": "--- [废土] 变体3: 干燥低地填补 ---",
+          "//_comment": "Weirdness 上限截断至 -0.05。",
+          "biome": "redshift:wasteland",
+          "parameters": {
+            "temperature": [-1.0, 1.0],
+            "humidity": [-1.0, -0.2],
+            "continentalness": [-0.11, 1.5],
+            "erosion": [-1.0, 1.0],
+            "weirdness": [-1.0, -0.05],
+            "depth": [0, 0],
+            "offset": 0
+          }
+        }
+      ]
+    }
+  }
+}

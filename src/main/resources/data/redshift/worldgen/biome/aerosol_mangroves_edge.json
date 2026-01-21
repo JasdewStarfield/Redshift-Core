@@ -1,0 +1,48 @@
+{
+  "has_precipitation": true,
+  "temperature": 0.9,
+  "downfall": 0.8,
+  "effects": {
+    "sky_color": 8567150,
+    "fog_color": 9870196,
+    "water_color": 6458178,
+    "water_fog_color": 4022066,
+    "grass_color_modifier": "none",
+    "particle": {
+      "options": {
+        "type": "minecraft:warped_spore"
+      },
+      "probability": 0.005
+    },
+    "ambient_sound": "redshift:ambient.aerosol_mangroves.loop",
+    "additions_sound": {
+      "sound": "redshift:ambient.aerosol_mangroves.additions",
+      "tick_chance": 0.003
+    },
+    "mood_sound": {
+      "sound": "minecraft:ambient.crimson_forest.mood",
+      "tick_delay": 6000,
+      "block_search_extent": 8,
+      "offset": 2.0
+    }
+  },
+  "spawners": {},
+  "spawn_costs": {},
+  "carvers": {},
+  "features": [
+    [],
+    [],
+    [
+      "redshift:mangrove_mud_spire"
+    ],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [
+      "redshift:alien_mangrove_small"
+    ]
+  ]
+}

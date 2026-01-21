@@ -1,0 +1,68 @@
+{
+  "ambient.aerosol_mangroves.loop": {
+    "category": "ambient",
+    "subtitle": "subtitles.ambient.redshift.aerosol_mangroves.loop",
+    "sounds": [
+      {
+        "name": "redshift:ambient/aerosol_mangroves/mangroves_ambient_loop",
+        "stream": true,
+        "volume": 0.8
+      }
+    ]
+  },
+  "ambient.aerosol_mangroves.additions": {
+    "category": "ambient",
+    "subtitle": "subtitles.ambient.redshift.aerosol_mangroves.additions",
+    "sounds": [
+      {
+        "name": "redshift:ambient/aerosol_mangroves/mangroves_addition_geiger",
+        "volume": 0.5,
+        "pitch": 1.0
+      }
+    ]
+  },
+  "ambient.basalt_organ.loop": {
+    "category": "ambient",
+    "subtitle": "subtitles.ambient.redshift.basalt_organ.loop",
+    "sounds": [
+      {
+        "name": "redshift:ambient/basalt_organ/basalt_organ_ambient_loop",
+        "stream": true,
+        "volume": 0.7
+      }
+    ]
+  },
+  "ambient.basalt_organ.additions": {
+    "category": "ambient",
+    "subtitle": "subtitles.ambient.redshift.basalt_organ.additions",
+    "sounds": [
+      {
+        "name": "redshift:ambient/basalt_organ/basalt_organ_addition_rock",
+        "volume": 0.5,
+        "pitch": 1.0
+      }
+    ]
+  },
+  "ambient.wasteland.loop": {
+    "category": "ambient",
+    "subtitle": "subtitles.ambient.redshift.wasteland.loop",
+    "sounds": [
+      {
+        "name": "redshift:ambient/wasteland/wasteland_ambient_loop",
+        "stream": true,
+        "volume": 0.7
+      }
+    ]
+  },
+  "ambient.wasteland.additions": {
+    "category": "ambient",
+    "subtitle": "subtitles.ambient.redshift.wasteland.additions",
+    "sounds": [
+      {
+        "name": "redshift:ambient/wasteland/wasteland_addition_stone",
+        "volume": 0.2,
+        "pitch": 0.7
+      }
+    ]
+  }
+}

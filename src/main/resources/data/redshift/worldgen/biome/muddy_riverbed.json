@@ -1,0 +1,22 @@
+{
+  "has_precipitation": false,
+  "temperature": 1.5,
+  "downfall": 0.0,
+  "effects": {
+    "sky_color": 10916467,
+    "fog_color": 11576233,
+    "water_color": 9996117,
+    "water_fog_color": 8613465,
+    "foliage_color": 10258529,
+    "grass_color": 10258529,
+    "ambient_sound": "redshift:ambient.aerosol_mangroves.loop",
+    "additions_sound": {
+      "sound": "redshift:ambient.aerosol_mangroves.additions",
+      "tick_chance": 0.003
+    }
+  },
+  "spawners": {},
+  "spawn_costs": {},
+  "carvers": {},
+  "features": []
+}
