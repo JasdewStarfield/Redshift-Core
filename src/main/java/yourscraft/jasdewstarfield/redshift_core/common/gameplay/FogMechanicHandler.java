@@ -34,18 +34,8 @@ public class FogMechanicHandler {
         }
 
         // 4. 获取当前位置的雾气浓度
-        // 这里调用的是我们之前写好的通用逻辑
         float density = FogLogic.getFogIntensity(player.level(), player.position());
 
-        // --- 阶段 1: 视觉干扰 (> 0.2) ---
-        // 起到警示作用
-        if (density > 0.2f) {
-            // 持续时间：2s。
-            // 参数: 效果, 时长, 等级, 是否环境效果(true=粒子隐形), 是否可见(false=无右上角图标)
-            player.addEffect(new MobEffectInstance(MobEffects.CONFUSION, 40, 0, true, false));
-        }
-
-        // --- 阶段 2: 毒性伤害 (> 0.5) ---
         if (density > 0.5f) {
             // 判断是否是高浓度区域 (> 0.8)
             boolean isLethal = density > 0.8f;
