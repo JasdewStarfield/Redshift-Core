@@ -2,9 +2,12 @@ package yourscraft.jasdewstarfield.redshift_core.common.worldgen;
 
 import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.QuartPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -12,18 +15,23 @@ import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 
-import java.util.HashMap;
-import java.util.Map;
-
 public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
 
-    // 柱子的半径（方块数）
-    private static final int HEX_SIZE = 5;
-    // 缝隙阈值 (0.0 ~ 1.0)
-    private static final double BORDER_THRESHOLD = 1;
-    // 团簇生成的半径
-    private static final int CLUSTER_RADIUS_MIN = 12;
-    private static final int CLUSTER_RADIUS_MAX = 36;
+    // 柱子直径设定 (HEX_SIZE=3 -> 直径约5格)
+    private static final int HEX_SIZE = 4;
+    private static final double BORDER_THRESHOLD = 1; // 缝隙大小
+
+    // --- 噪音参数设定 ---
+    // 1. 岛屿掩码：决定哪里有柱子。频率越低，岛屿越大。
+    private static final double ISLAND_SCALE = 0.008;
+    private static final double ISLAND_THRESHOLD = -0.35; // 阈值，大于此值才生成
+
+    // 2. 峡谷/裂缝：用于切割跑道。频率较高，形成细长条纹。
+    private static final double CANYON_SCALE = 0.06;
+    private static final double CANYON_WIDTH = 0.12; // 裂缝宽度
+
+    // 3. 高度地形：决定柱子高度。
+    private static final double HEIGHT_SCALE = 0.02;
 
     public HexagonalBasaltFeature(Codec<NoneFeatureConfiguration> codec) {
         super(codec);
@@ -33,124 +41,68 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
     public boolean place(FeaturePlaceContext<NoneFeatureConfiguration> context) {
         WorldGenLevel level = context.level();
         BlockPos origin = context.origin();
-        RandomSource random = context.random();
-
-        // 1. 随机决定这个“管风琴团簇”的大小
-        int clusterRadius = random.nextInt(CLUSTER_RADIUS_MAX - CLUSTER_RADIUS_MIN + 1) + CLUSTER_RADIUS_MIN;
-        int rSquared = clusterRadius * clusterRadius;
+        long seed = level.getSeed();
 
         boolean placedAny = false;
 
-        // 预定义方块状态
-        BlockState basaltState = Blocks.BASALT.defaultBlockState();
-        BlockState topState = Blocks.POLISHED_BASALT.defaultBlockState();
+        int chunkMinX = origin.getX();
+        int chunkMinZ = origin.getZ();
+        int chunkMaxX = chunkMinX + 15;
+        int chunkMaxZ = chunkMinZ + 15;
 
-        // 缓存。Key: hexKey (将 q 和 r 压缩成一个 long), Value: 柱子的最终表面高度 Y
-        Map<Long, Integer> hexHeightCache = new HashMap<>();
+        // 1. 计算需要遍历的六边形坐标范围 (Q, R)
+        // 扩大搜索范围，确保覆盖到所有中心点可能落在本 Chunk 的六边形
+        long[] minHex = HexMath.blockToHex(chunkMinX, chunkMinZ, HEX_SIZE);
+        long[] maxHex = HexMath.blockToHex(chunkMaxX, chunkMaxZ, HEX_SIZE);
 
-        // 2. 遍历以 origin 为中心的区域
+        // 增加 buffer 确保不漏掉边缘
+        long startQ = Math.min(minHex[0], maxHex[0]) - 2;
+        long endQ   = Math.max(minHex[0], maxHex[0]) + 2;
+        long startR = Math.min(minHex[1], maxHex[1]) - 2;
+        long endR   = Math.max(minHex[1], maxHex[1]) + 2;
+
         BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
 
-        for (int x = -clusterRadius; x <= clusterRadius; x++) {
-            for (int z = -clusterRadius; z <= clusterRadius; z++) {
+        for (long q = startQ; q <= endQ; q++) {
+            for (long r = startR; r <= endR; r++) {
+                int[] centerCoord = HexMath.hexToBlock(q, r, HEX_SIZE);
+                int cx = centerCoord[0];
+                int cz = centerCoord[1];
 
-                // 简单的圆形距离检查，只生成圆内的柱子
-                if (x * x + z * z > rSquared) continue;
-
-                // 转换为绝对世界坐标
-                int worldX = origin.getX() + x;
-                int worldZ = origin.getZ() + z;
-
-                // --- 3. 六边形网格计算 ---
-                // 关键：必须使用 worldX/worldZ，这样不同团簇之间的网格依然是全局对齐的
-                long[] hexCoord = HexMath.blockToHex(worldX, worldZ, HEX_SIZE);
-                long q = hexCoord[0];
-                long r = hexCoord[1];
-
-                // --- 4. 缝隙处理 ---
-                double hexDist = HexMath.getRadius(q, r, worldX, worldZ, HEX_SIZE);
-                if (hexDist > BORDER_THRESHOLD) {
+                // 1. 所有权检查：只处理中心点在当前 Chunk 的六边形
+                if (cx < chunkMinX || cx > chunkMaxX || cz < chunkMinZ || cz > chunkMaxZ) {
                     continue;
                 }
 
-                // --- 5. 获取/计算该六边形的高度 ---
-                // 确保同一个六边形内的所有方块拿到同一个高度
-                long hexKey = (q << 32) | (r & 0xFFFFFFFFL);
+                BlockPos centerPos = new BlockPos(cx, 100, cz);
 
-                Integer surfaceY;
+                // 2. 获取基准群系
+                var centerBiomeHolder = getBiomeSafe(level, centerPos);
+                var biomeKeyOpt = centerBiomeHolder.unwrapKey();
+                if (biomeKeyOpt.isEmpty()) continue;
+                ResourceKey<Biome> targetBiomeKey = biomeKeyOpt.get();
 
-                if (hexHeightCache.containsKey(hexKey)) {
-                    surfaceY = hexHeightCache.get(hexKey);
-                } else {
-                    // 如果缓存里没有，说明是第一次遇到这个六边形，开始计算它的属性
-                    int[] centerCoord = HexMath.hexToBlock(q, r, HEX_SIZE);
-                    int centerX = centerCoord[0];
-                    int centerZ = centerCoord[1];
-
-                    // A. 获取地面高度
-                    int groundY = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, centerX, centerZ);
-
-                    // 如果中心点悬空或太低，标记为不可生成
-                    if (groundY <= level.getMinBuildHeight()) {
-                        surfaceY = null;
-                    } else {
-                        // B. 计算噪音高度
-                        double noise = getNaturalHeight(level.getSeed(), q, r);
-
-                        // C. 计算边缘淡出
-                        // 使用【六边形中心】到【团簇原点】的距离，而不是当前方块的距离
-                        double distFromOrigin = Math.sqrt(Math.pow(centerX - origin.getX(), 2) + Math.pow(centerZ - origin.getZ(), 2));
-                        double distFactor = distFromOrigin / clusterRadius;
-
-                        // 使用余弦插值让顶部更平坦，边缘下降更陡峭，形成高原感
-                        double fade = Math.cos(distFactor * Math.PI / 2.0);
-                        fade = Mth.clamp(fade, 0.0, 1.0);
-
-                        // D. 最终高度计算
-                        int heightOffset = (int) ((10 + noise * 50) * fade);
-
-                        // 只有高度 > 1 才生成，避免地面上只有一层薄皮
-                        if (heightOffset < 2) {
-                            surfaceY = null;
-                        } else {
-                            surfaceY = groundY + heightOffset;
-                        }
-                    }
-                    // 存入缓存
-                    hexHeightCache.put(hexKey, surfaceY);
+                // id 校验
+                String targetId = targetBiomeKey.location().toString();
+                if (!targetId.equals("redshift:basalt_organ")) {
+                    continue;
                 }
 
-                // 如果当前六边形被标记为不生成，则跳过
+                // 边缘校验
+                if (!isSafeFromBiomeEdge(level, cx, cz, 100, targetBiomeKey)) {
+                    continue;
+                }
+
+                // 3. 计算高度
+                Integer surfaceY = calculateHexHeight(level, seed, cx, cz, q, r);
                 if (surfaceY == null) continue;
 
-                // --- 7. 放置方块 ---
-                mutablePos.set(worldX, surfaceY, worldZ);
+                int groundY = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, cx, cz);
+                boolean isGroundLayer = (surfaceY <= groundY + 1);
 
-                if (!level.isOutsideBuildHeight(mutablePos)) {
-                    // 放置柱顶
-                    if (level.getBlockState(mutablePos).canBeReplaced()) {
-                        level.setBlock(mutablePos, topState, 2);
-                        placedAny = true;
-                    }
-
-                    // 向下延伸
-                    int startY = surfaceY - 1;
-                    int maxDepth = 100;
-                    for (int y = startY; y > level.getMinBuildHeight() && (startY - y) < maxDepth; y--) {
-                        mutablePos.setY(y);
-                        BlockState stateBelow = level.getBlockState(mutablePos);
-
-                        if (stateBelow.is(Blocks.BEDROCK)) break;
-
-                        // 如果是不可替换的固体（如石头），就停止
-                        if (stateBelow.isSolidRender(level, mutablePos) && !stateBelow.canBeReplaced()) {
-                            // 如果是同类玄武岩，说明和下面的地形融合了，也可以停
-                            if (!stateBelow.is(Blocks.BASALT) && !stateBelow.is(Blocks.POLISHED_BASALT)) {
-                                break;
-                            }
-                        }
-                        level.setBlock(mutablePos, basaltState, 2);
-                    }
+                // 4. 生成柱子实体 (绘制六边形内的所有方块)
+                if (placeHexColumn(level, mutablePos, cx, cz, q, r, surfaceY, isGroundLayer)) {
+                    placedAny = true;
                 }
             }
         }
@@ -158,12 +110,201 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
         return placedAny;
     }
 
-    // --- 噪音算法 (针对六边形坐标 q, r) ---
-    private double getNaturalHeight(long seed, long q, long r) {
-        double trend = pseudoPerlin(seed, q * 0.1, r * 0.1);
-        double detail = pseudoPerlin(seed + 12345, q * 0.3, r * 0.3) * 0.3;
-        double jitter = (coordHash(q, r) % 100) / 100.0 * 0.15;
-        return Mth.clamp((trend + detail + jitter + 1) / 2.0, 0.0, 1.0);
+
+    /**
+     * 绘制单根六边形柱子
+     */
+    private boolean placeHexColumn(WorldGenLevel level, BlockPos.MutableBlockPos mutablePos,
+                                   int cx, int cz, long q, long r, int surfaceY, boolean isGroundLayer) {
+        boolean placed = false;
+
+        // 扫描范围：中心点周围 (HEX_SIZE * 2) 的方块
+        int scanRadius = (int)Math.ceil(HEX_SIZE * 2.0);
+
+        for (int dx = -scanRadius; dx <= scanRadius; dx++) {
+            for (int dz = -scanRadius; dz <= scanRadius; dz++) {
+                int worldX = cx + dx;
+                int worldZ = cz + dz;
+
+                // 1. 几何裁剪：判断该点是否属于当前 (q, r) 六边形
+                if (HexMath.getRadius(q, r, worldX, worldZ, HEX_SIZE) > BORDER_THRESHOLD) {
+                    continue;
+                }
+
+                mutablePos.set(worldX, surfaceY, worldZ);
+
+                if (level.isOutsideBuildHeight(mutablePos)) continue;
+
+                // 3. 替换检查
+                BlockState currentState = level.getBlockState(mutablePos);
+                BlockState pillarBlock;
+                BlockState topBlock;
+
+                boolean canPlace;
+                if (isGroundLayer) {
+                    pillarBlock = Blocks.BLACKSTONE.defaultBlockState();
+                    topBlock = Blocks.BLACKSTONE.defaultBlockState();
+                    canPlace = currentState.canBeReplaced() ||
+                            currentState.is(Blocks.BASALT) ||
+                            currentState.is(Blocks.POLISHED_BASALT) ||
+                            currentState.is(Blocks.BLACKSTONE);
+                } else {
+                    pillarBlock = Blocks.BASALT.defaultBlockState();
+                    topBlock = Blocks.POLISHED_BASALT.defaultBlockState();
+                    canPlace = currentState.canBeReplaced();
+                }
+
+                if (canPlace) {
+                    level.setBlock(mutablePos, topBlock, 2);
+                    placed = true;
+
+                    // 4. 向下延伸柱身
+                    int startY = surfaceY - 1;
+                    int maxDepth = 100;
+                    for (int y = startY; y > level.getMinBuildHeight() && (startY - y) < maxDepth; y--) {
+                        mutablePos.setY(y);
+                        BlockState stateBelow = level.getBlockState(mutablePos);
+
+                        if (stateBelow.is(Blocks.BEDROCK)) break;
+                        // 遇到实心方块停止
+                        if (!stateBelow.canBeReplaced()) {
+                            if (isGroundLayer || !stateBelow.is(Blocks.BLACKSTONE)) {
+                                break;
+                            }
+                        }
+
+                        BlockState blockToPlace;
+                        if (!isGroundLayer && shouldBeBlackstone(level.getSeed(), worldX, y, worldZ)) {
+                            blockToPlace = Blocks.BLACKSTONE.defaultBlockState();
+                        } else {
+                            blockToPlace = pillarBlock;
+                        }
+                        level.setBlock(mutablePos, blockToPlace, 2);
+                    }
+                }
+            }
+        }
+        return placed;
+    }
+
+    /**
+     * 边缘探测逻辑 (Perimeter Patrol)
+     * 检查柱子最外圈的关键点。如果任何一个点落在了目标群系之外，
+     * 说明这根柱子处于群系交界处，为了防止被切断，直接放弃生成。
+     */
+    private boolean isSafeFromBiomeEdge(WorldGenLevel level, int cx, int cz, int groundY,
+                                        ResourceKey<Biome> targetKey) {
+        // 探测半径：设置为柱子的最大视觉半径\
+        double checkRadius = HEX_SIZE * 2.0;
+
+        // 检测六边形的 6 个顶点
+        for (int i = 0; i < 6; i++) {
+            // 将角度转换为弧度 (60度 = PI/3)
+            double angle = Math.toRadians(60 * i);
+
+            // 计算探针坐标
+            int px = cx + (int)(checkRadius * Math.cos(angle));
+            int pz = cz + (int)(checkRadius * Math.sin(angle));
+
+            // 保持和 placeHexColumn 一致的高度判定逻辑 (groundY + 2)
+            BlockPos probePos = new BlockPos(px, groundY + 2, pz);
+
+            // 使用安全的方法获取群系
+            // 只要有一个角跑出去了，就视为不安全
+            if (!getBiomeSafe(level, probePos).is(targetKey)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private Holder<Biome> getBiomeSafe(WorldGenLevel level, BlockPos pos) {
+        // 使用 WorldGenLevel 的接口，它能处理好全局坐标到内部存储的转换
+        return level.getNoiseBiome(
+                QuartPos.fromBlock(pos.getX()),
+                QuartPos.fromBlock(pos.getY()),
+                QuartPos.fromBlock(pos.getZ())
+        );
+    }
+
+    /**
+     * 核心逻辑：决定某个六边形是否存在、多高
+     * 返回 null 表示此处不生成柱子 (空地/裂缝)
+     */
+    private Integer calculateHexHeight(WorldGenLevel level, long seed, int x, int z, long q, long r) {
+        // A. 基础地面检查
+        int groundY = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, x, z);
+        if (groundY <= level.getMinBuildHeight()) return null;
+
+        // --- 1. 基础噪音采样 ---
+        double maskNoise = pseudoPerlin(seed, x * ISLAND_SCALE, z * ISLAND_SCALE);
+        double canyonNoise = pseudoPerlin(seed + 123, x * CANYON_SCALE, z * CANYON_SCALE);
+        double heightNoise = pseudoPerlin(seed + 999, x * HEIGHT_SCALE, z * HEIGHT_SCALE);
+
+        // --- 2. 判定逻辑状态 ---
+
+        // 状态 A: 是否处于"柱子生长区" (由岛屿 Mask 决定)
+        boolean hasColumn = (maskNoise >= ISLAND_THRESHOLD);
+
+        // 状态 B: 是否处于"峡谷切割区" (由裂缝噪音决定)
+        boolean isCanyon = (Math.abs(canyonNoise) < CANYON_WIDTH);
+
+        // --- 3. 决策输出 ---
+        if (isCanyon) {
+            return groundY;
+        }
+        if (!hasColumn) {
+            return groundY + 1;
+        }
+
+        // 高度计算
+        int steppedHeight = getSteppedHeight(maskNoise, heightNoise);
+
+        return groundY + steppedHeight;
+    }
+
+    private static int getSteppedHeight(double maskNoise, double heightNoise) {
+        double edgeFactor = Mth.clamp((maskNoise - ISLAND_THRESHOLD) * 2.0, 0.0, 1.0);
+        double rawHeight = 10 + (heightNoise + 1.0) / 2.0 * 55;
+        rawHeight *= edgeFactor;
+
+        // 阶梯化处理
+        int dynamicStep;
+        if (edgeFactor < 0.3) {
+            dynamicStep = 2; // 边缘非常平缓
+        } else if (edgeFactor < 0.6) {
+            dynamicStep = 5; // 过渡带
+        } else {
+            dynamicStep = 10; // 中心宏伟的管风琴
+        }
+
+        return (int) (rawHeight / dynamicStep) * dynamicStep;
+    }
+
+    private boolean shouldBeBlackstone(long seed, int x, int y, int z) {
+        // 1. 纹理缩放: 值越大，纹理越细碎
+        double scale = 0.18;
+
+        // 2. 模拟 3D 采样
+        double sampleX = (x + y * 0.7) * scale;
+        double sampleZ = (z - y * 0.7) * scale;
+
+        // 3. 获取基础噪音
+        double noise = pseudoPerlin(seed + 888, sampleX, sampleZ);
+
+        // 4. 增加一点高频扰动
+        double detailNoise = pseudoPerlin(seed + 999, sampleX * 2.0, sampleZ * 2.0);
+        // 混合比例：80% 主噪音 + 20% 细节噪音
+        double finalNoise = noise * 0.8 + detailNoise * 0.2;
+
+        // 5. 脊状判定 (Ridge Noise)
+        // 我们只取噪音值非常接近 0 的部分。
+        // Math.abs(finalNoise) 会把噪音变成"V"字形的峡谷。
+        // 阈值越小，裂纹越细。建议 0.1 ~ 0.15。
+        double crackWidth = 0.1;
+
+        return Math.abs(finalNoise) < crackWidth;
     }
 
     // --- 内部数学类 ---
