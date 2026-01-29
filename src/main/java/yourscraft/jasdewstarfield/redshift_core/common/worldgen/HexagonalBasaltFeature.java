@@ -17,8 +17,8 @@ import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConf
 
 public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
 
-    // 柱子直径设定 (HEX_SIZE=3 -> 直径约5格)
-    private static final int HEX_SIZE = 4;
+    // 柱子直径设定
+    private static final int HEX_SIZE = 6;
     private static final double BORDER_THRESHOLD = 1; // 缝隙大小
 
     // --- 噪音参数设定 ---

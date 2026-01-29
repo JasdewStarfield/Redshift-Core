@@ -1,15 +1,4 @@
 {
-  "type": "minecraft:basalt_columns",
-  "config": {
-    "reach": {
-      "type": "minecraft:uniform",
-      "max_inclusive": 3,
-      "min_inclusive": 1
-    },
-    "height": {
-      "type": "minecraft:uniform",
-      "max_inclusive": 10,
-      "min_inclusive": 4
-    }
-  }
+  "type": "redshift:basalt_organ_columns",
+  "config": {}
 }

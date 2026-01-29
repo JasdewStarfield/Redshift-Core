@@ -7,139 +7,116 @@
       "type": "minecraft:multi_noise",
       "biomes": [
         {
-          "//": "--- [气溶胶红树林] 变体1: 深层盆地 ---",
+          "//": "================ [海洋区域 Continentalness < -0.11] ================",
+          "//_comment": "--- [气溶胶红树林] 核心深海区 ---",
+          "//_logic": "占据所有深海区域。Erosion 不做限制，因为深海通常不会隆起太高，除非是非常极端的噪音设置。",
           "biome": "redshift:aerosol_mangroves",
           "parameters": {
-            "temperature": [-1.0, 1.0],
-            "humidity": [-1.0, 1.0],
-            "continentalness": [-1.2, -0.455],
+            "temperature": [0.0, 0.0],
+            "humidity": [0.0, 0.0],
+            "continentalness": [-1.2, -0.19],
             "erosion": [-1.0, 1.0],
             "weirdness": [-2.0, 2.0],
-            "depth": [0, 0],
-            "offset": 0
+            "depth": [0.0, 0.0],
+            "offset": 0.0
           }
         },
         {
-          "//": "--- [气溶胶红树林] 变体2: 边缘浅滩 ---",
-          "biome": "redshift:aerosol_mangroves",
-          "parameters": {
-            "temperature": [-0.5, 1.0],
-            "humidity": [0.0, 1.0],
-            "continentalness": [-0.455, -0.19],
-            "erosion": [-1.0, 1.0],
-            "weirdness": [-2.0, 2.0],
-            "depth": [0, 0],
-            "offset": 0
-          }
-        },
-        {
-          "//": "--- [红树林边缘] ---",
-          "//_comment": "在 -0.12 到 -0.08 的狭长带生成过渡群系 (粗泥地表)",
+          "//": "--- [红树林边缘] 浅滩/泥滩 ---",
+          "//_logic": "对应原版 Beach。位于海岸带 [-0.19, -0.11]，且地形相对平坦 (Erosion > -0.45)。防止生成在悬崖上。",
           "biome": "redshift:aerosol_mangroves_edge",
           "parameters": {
-            "temperature": [-1.0, 1.0],
-            "humidity": [-0.5, 1.0],
+            "temperature": [0.0, 0.0],
+            "humidity": [0.0, 0.0],
             "continentalness": [-0.19, -0.11],
-            "erosion": [-1.0, 1.0],
-            "weirdness": [-2.0, 0.6],
-            "depth": [0, 0],
-            "offset": 0
+            "erosion": [-0.45, 1.0],
+            "weirdness": [-2.0, 2.0],
+            "depth": [0.0, 0.0],
+            "offset": 0.0
           }
         },
         {
-          "//": "--- [泥泞河床]: 内陆泥浆河 ---",
-          "//_comment": "在陆地(> -0.04)的高侵蚀度区域(erosion > 0.4)且地势低洼处生成，模拟河道",
+          "//": "--- [焦黑石滩] 海岸陡峭峡谷或浅滩 ---",
+          "biome": "redshift:charred_shore",
+          "parameters": {
+            "temperature": [0.0, 0.0],
+            "humidity": [0.0, 0.0],
+            "continentalness": [-0.19, -0.11],
+            "erosion": [-2.0, -0.45],
+            "weirdness": [-2.0, 2.0],
+            "depth": [0.0, 0.0],
+            "offset": 0.0
+          }
+        },
+        {
+          "//": "================ [内陆区域 Continentalness > -0.11] ================",
+          "//_comment": "--- [泥泞河床] ---",
+          "//_logic": "贯穿内陆的河流。Weirdness 锁定在中心 [-0.05, 0.05]。Erosion 需要 > -0.5 确保不是在极高山顶生成（除非你想要高山峡谷河流）。",
           "biome": "redshift:muddy_riverbed",
           "parameters": {
-            "temperature": [-1.0, 1.0],
-            "humidity": [-1.0, 1.0],
-            "continentalness": [-0.11, 1.0],
-            "erosion": [-1.0, 1.0],
+            "temperature": [0.0, 0.0],
+            "humidity": [0.0, 0.0],
+            "continentalness": [-0.11, 1.2],
+            "erosion": [-0.45, 1.0],
             "weirdness": [-0.05, 0.05],
-            "depth": [0, 0],
-            "offset": 0
+            "depth": [0.0, 0.0],
+            "offset": 0.0
           }
         },
         {
-          "//": "--- [玄武岩管风琴] 变体1: 高耸尖峰 ---",
+          "//": "--- [玄武岩管风琴] 内陆山峰 (左区) ---",
+          "//_logic": "内陆的高山区域。Erosion < -0.45 代表崎岖/高耸。Weirdness < -0.05 避开河流左侧。",
           "biome": "redshift:basalt_organ",
           "parameters": {
-            "temperature": [-1.0, 1.0],
-            "humidity": [-1.0, -0.2],
-            "continentalness": [-0.11, 1.5],
-            "erosion": [-1.0, -0.3],
-            "weirdness": [0.4, 2.0],
-            "depth": [0, 0],
-            "offset": 0
+            "temperature": [0.0, 0.0],
+            "humidity": [0.0, 0.0],
+            "continentalness": [-0.11, 1.2],
+            "erosion": [-2.0, -0.45],
+            "weirdness": [-2.0, -0.05],
+            "depth": [0.0, 0.0],
+            "offset": 0.0
           }
         },
         {
-          "//": "--- [玄武岩管风琴] 变体2: 干燥高原 ---",
-          "//_comment": "干燥且侵蚀度极低(极度崎岖)的区域",
+          "//": "--- [玄武岩管风琴] 内陆山峰 (右区) ---",
+          "//_logic": "内陆的高山区域。Weirdness > 0.05 避开河流右侧。",
           "biome": "redshift:basalt_organ",
           "parameters": {
-            "temperature": [0.0, 1.5],
-            "humidity": [-1.0, -0.5],
-            "continentalness": [0.2, 1.5],
-            "erosion": [-1.0, -0.6],
-            "weirdness": [0.05, 0.5],
-            "depth": [0, 0],
-            "offset": 0
+            "temperature": [0.0, 0.0],
+            "humidity": [0.0, 0.0],
+            "continentalness": [-0.11, 1.2],
+            "erosion": [-2.0, -0.45],
+            "weirdness": [0.05, 2.0],
+            "depth": [0.0, 0.0],
+            "offset": 0.0
           }
         },
         {
-          "//": "--- [废土] 变体1: 标准平原 (左侧) ---",
-          "//_comment": "Weirdness 上限从 0.5 截断至 -0.05，避开河流左侧。",
+          "//": "--- [废土] 基础平原 (左区) ---",
+          "//_logic": "内陆的平坦区域。Erosion > -0.45 代表平原/丘陵。Weirdness 避开河流左侧。",
           "biome": "redshift:wasteland",
           "parameters": {
-            "temperature": [-1.0, 1.0],
-            "humidity": [-0.2, 1.0],
-            "continentalness": [-0.11, 1.0],
-            "erosion": [-0.3, 1.0],
-            "weirdness": [-1.0, -0.05],
-            "depth": [0, 0],
-            "offset": 0
+            "temperature": [0.0, 0.0],
+            "humidity": [0.0, 0.0],
+            "continentalness": [-0.11, 1.2],
+            "erosion": [-0.45, 1.0],
+            "weirdness": [-2.0, -0.05],
+            "depth": [0.0, 0.0],
+            "offset": 0.0
           }
         },
         {
-          "//": "--- [废土] 变体1B: 标准平原 (右侧) ---",
-          "//_comment": "接管河流右侧 [0.05, 0.5] 的区域，确保河流两岸都有废土填充。",
+          "//": "--- [废土] 基础平原 (右区) ---",
+          "//_logic": "内陆的平坦区域。Weirdness 避开河流右侧。",
           "biome": "redshift:wasteland",
           "parameters": {
-            "temperature": [-1.0, 1.0],
-            "humidity": [-0.2, 1.0],
-            "continentalness": [-0.11, 1.0],
-            "erosion": [-0.3, 1.0],
-            "weirdness": [0.05, 0.5],
-            "depth": [0, 0],
-            "offset": 0
-          }
-        },
-        {
-          "//": "--- [废土] 变体2: 湿润高地填补 ---",
-          "biome": "redshift:wasteland",
-          "parameters": {
-            "temperature": [-1.0, 1.0],
-            "humidity": [-0.2, 1.0],
-            "continentalness": [-0.11, 1.5],
-            "erosion": [-1.0, 1.0],
-            "weirdness": [0.5, 2.0],
-            "depth": [0, 0],
-            "offset": 0
-          }
-        },
-        {
-          "//": "--- [废土] 变体3: 干燥低地填补 ---",
-          "//_comment": "Weirdness 上限截断至 -0.05。",
-          "biome": "redshift:wasteland",
-          "parameters": {
-            "temperature": [-1.0, 1.0],
-            "humidity": [-1.0, -0.2],
-            "continentalness": [-0.11, 1.5],
-            "erosion": [-1.0, 1.0],
-            "weirdness": [-1.0, -0.05],
-            "depth": [0, 0],
-            "offset": 0
+            "temperature": [0.0, 0.0],
+            "humidity": [0.0, 0.0],
+            "continentalness": [-0.11, 1.2],
+            "erosion": [-0.45, 1.0],
+            "weirdness": [0.05, 2.0],
+            "depth": [0.0, 0.0],
+            "offset": 0.0
           }
         }
       ]

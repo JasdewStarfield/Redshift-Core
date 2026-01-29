@@ -1,0 +1,28 @@
+{
+  "has_precipitation": false,
+  "temperature": 1.5,
+  "downfall": 0.0,
+  "effects": {
+    "sky_color": 1710618,
+    "fog_color": 3618615,
+    "water_color": 3816258,
+    "water_fog_color": 1908245,
+    "foliage_color": 8282166,
+    "grass_color": 8282166,
+    "particle": {
+      "options": {
+        "type": "minecraft:ash"
+      },
+      "probability": 0.02
+    },
+    "ambient_sound": "redshift:ambient.basalt_organ.loop",
+    "additions_sound": {
+      "sound": "redshift:ambient.basalt_organ.additions",
+      "tick_chance": 0.005
+    }
+  },
+  "spawners": {},
+  "spawn_costs": {},
+  "carvers": {},
+  "features": []
+}
