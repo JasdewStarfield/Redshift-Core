@@ -6,6 +6,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import yourscraft.jasdewstarfield.redshift_core.RedshiftCore;
+import yourscraft.jasdewstarfield.redshift_core.client.rhythm.PulseOverlay;
 import yourscraft.jasdewstarfield.redshift_core.client.fog.FogOverlay;
 
 @EventBusSubscriber(modid = RedshiftCore.MODID)
@@ -17,6 +18,12 @@ public class ClientModEvents {
                 VanillaGuiLayers.CAMERA_OVERLAYS,
                 ResourceLocation.fromNamespaceAndPath(RedshiftCore.MODID, "toxic_fog_overlay"),
                 new FogOverlay()
+        );
+
+        event.registerAbove(
+                ResourceLocation.fromNamespaceAndPath(RedshiftCore.MODID, "toxic_fog_overlay"),
+                ResourceLocation.fromNamespaceAndPath(RedshiftCore.MODID, "basalt_organ_flash_overlay"),
+                new PulseOverlay()
         );
     }
 }

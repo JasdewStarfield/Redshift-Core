@@ -3,7 +3,7 @@ package yourscraft.jasdewstarfield.redshift_core.client.fog;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
-import yourscraft.jasdewstarfield.redshift_core.common.FogLogic;
+import yourscraft.jasdewstarfield.redshift_core.common.logic.fog.FogLogic;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -1,4 +1,4 @@
-package yourscraft.jasdewstarfield.redshift_core.common;
+package yourscraft.jasdewstarfield.redshift_core.common.logic.fog;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -10,6 +10,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.phys.Vec3;
 import yourscraft.jasdewstarfield.redshift_core.client.fog.FogConfig;
+import yourscraft.jasdewstarfield.redshift_core.common.util.BiomeSamplerUtil;
 
 public class FogLogic {
 
@@ -79,10 +80,14 @@ public class FogLogic {
         // 边缘群系在深夜完全无雾，正午雾最浓
         float edgeWeight = 0.9f * dayNightFactor;
 
-        // 3. 水平采样
-        float biomeFactor = sampleBiomeDensity(level, pos, edgeWeight);
+        // 3. 采样核心区
+        float coreDensity = BiomeSamplerUtil.sampleBiomeWeight(level, pos, 32, 16, b -> b.is(AEROSOL_MANGROVES));
 
-        return biomeFactor * verticalFactor;
+        // 4. 采样边缘区
+        float edgeDensity = BiomeSamplerUtil.sampleBiomeWeight(level, pos, 32, 16, b -> b.is(AEROSOL_MANGROVES_EDGE));
+
+        float totalDensity = coreDensity + edgeDensity * edgeWeight;
+        return Mth.clamp(totalDensity * 1.2f, 0.0f, 1.0f) * verticalFactor;
     }
 
     private static float getVerticalFactor(double y) {
@@ -104,35 +109,5 @@ public class FogLogic {
         // 先算线性剩余，再三次方
         float linearFactor = 1.0f - Mth.clamp(normalizedDist, 0.0f, 1.0f);
         return (float) Math.pow(linearFactor, 3);
-    }
-
-    private static float sampleBiomeDensity(Level level, Vec3 centerPos, float edgeWeight) {
-        BlockPos playerPos = BlockPos.containing(centerPos);
-        int radius = 32;
-        int step = 16;
-        float totalWeight = 0f;
-        int sampleCount = 0;
-
-        // 5x5 网格采样
-        for (int x = -radius; x <= radius; x += step) {
-            for (int z = -radius; z <= radius; z += step) {
-                sampleCount++;
-
-                // 采样点坐标 (取 Y=60 确保取到正确的群系，不受地下洞穴干扰)
-                BlockPos samplePos = playerPos.offset(x, 0, z);
-                Holder<Biome> b = level.getBiome(new BlockPos(samplePos.getX(), 60, samplePos.getZ()));
-
-                if (b.is(AEROSOL_MANGROVES)) {
-                    // 核心区：无论白天黑夜，始终存在
-                    totalWeight += 1.0f;
-                } else if (b.is(AEROSOL_MANGROVES_EDGE)) {
-                    // 边缘区：受时间因子影响
-                    totalWeight += edgeWeight;
-                }
-            }
-        }
-
-        float density = totalWeight / sampleCount;
-        return Mth.clamp(density * 1.2f, 0.0f, 1.0f);
     }
 }

@@ -7,7 +7,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import yourscraft.jasdewstarfield.redshift_core.RedshiftCore;
-import yourscraft.jasdewstarfield.redshift_core.common.FogLogic;
+import yourscraft.jasdewstarfield.redshift_core.common.logic.fog.FogLogic;
 
 @EventBusSubscriber(modid = RedshiftCore.MODID)
 public class FogMechanicHandler {

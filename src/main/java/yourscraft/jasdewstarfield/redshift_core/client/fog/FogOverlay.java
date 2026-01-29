@@ -10,7 +10,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.NotNull;
-import yourscraft.jasdewstarfield.redshift_core.common.FogLogic;
+import yourscraft.jasdewstarfield.redshift_core.common.logic.fog.FogLogic;
 
 
 public class FogOverlay implements LayeredDraw.Layer {

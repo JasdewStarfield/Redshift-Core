@@ -17,7 +17,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.joml.Matrix4f;
 import yourscraft.jasdewstarfield.redshift_core.client.RedshiftRenderTypes;
-import yourscraft.jasdewstarfield.redshift_core.common.FogLogic;
+import yourscraft.jasdewstarfield.redshift_core.common.logic.fog.FogLogic;
 
 import java.util.ArrayList;
 import java.util.List;
