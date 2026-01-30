@@ -5,6 +5,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import org.slf4j.Logger;
+import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftEffects;
 import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftSounds;
 import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftFeatures;
 
@@ -15,6 +16,7 @@ public class RedshiftCore {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     public RedshiftCore(IEventBus modEventBus, ModContainer modContainer) {
+        RedshiftEffects.register(modEventBus);
         RedshiftSounds.register(modEventBus);
         RedshiftFeatures.register(modEventBus);
         LOGGER.info("[Redshift Core] Mod Registered");

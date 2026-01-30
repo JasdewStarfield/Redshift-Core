@@ -3,5 +3,10 @@
   "biome.redshift.aerosol_mangroves_edge": "气溶胶红树林边缘",
   "biome.redshift.muddy_riverbed": "泥泞河床",
   "biome.redshift.basalt_organ": "玄武岩管风琴",
-  "biome.redshift.wasteland": "废土"
+  "biome.redshift.wasteland": "废土",
+
+  "effect.redshift.internal_injury": "内脏损伤",
+
+  "death.attack.redshift.infrasound": "%1$s 的内脏被次声波震碎了",
+  "death.attack.redshift.infrasound.player": "%1$s 在与 %2$s 的战斗中死于内脏共振"
 }

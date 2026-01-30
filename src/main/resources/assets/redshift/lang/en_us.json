@@ -3,5 +3,10 @@
   "biome.redshift.aerosol_mangroves_edge": "Aerosol Mangroves Edge",
   "biome.redshift.muddy_riverbed": "Muddy Riverbed",
   "biome.redshift.basalt_organ": "Basalt Organ",
-  "biome.redshift.wasteland": "Wasteland"
+  "biome.redshift.wasteland": "Wasteland",
+
+  "effect.redshift.internal_injury": "Internal Injury",
+
+  "death.attack.redshift.infrasound": "%1$s 's viscera was crushed by infrasound",
+  "death.attack.redshift.infrasound.player": "%1$s is killed by viscera resonance while fighting %2$s "
 }

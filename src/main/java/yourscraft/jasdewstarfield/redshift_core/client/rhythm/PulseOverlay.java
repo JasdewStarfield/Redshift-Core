@@ -11,6 +11,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 import yourscraft.jasdewstarfield.redshift_core.RedshiftCore;
+import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmExposureLogic;
 import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmManager;
 import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmPhase;
 import yourscraft.jasdewstarfield.redshift_core.common.util.BiomeSamplerUtil;
@@ -20,6 +21,10 @@ public class PulseOverlay implements LayeredDraw.Layer {
     private static final ResourceLocation VIGNETTE_LOCATION = ResourceLocation.fromNamespaceAndPath(RedshiftCore.MODID, "textures/misc/pulse_overlay.png");
 
     private float smoothedIntensity = 0.0f;
+    private float cachedExposure = 0.0f;
+    private long lastUpdateTick = 0;
+
+    private static final int UPDATE_INTERVAL = 10;
 
     @Override
     public void render(@NotNull GuiGraphics guiGraphics, @NotNull DeltaTracker deltaTracker) {
@@ -39,16 +44,15 @@ public class PulseOverlay implements LayeredDraw.Layer {
             return;
         }
 
-        // 3. 计算玩家是否在群系内 (0.0 ~ 1.0)
-        float biomeWeight = BiomeSamplerUtil.sampleBiomeWeight(
-                level,
-                player.position(),
-                32, 16,
-                holder -> holder.is(RhythmManager.BASALT_ORGAN)
-        );
+        long currentTick = level.getGameTime();
+        // 只有当时间流逝超过间隔时才更新
+        if (Math.abs(currentTick - lastUpdateTick) >= UPDATE_INTERVAL) {
+            // 调用重型计算逻辑
+            this.cachedExposure = RhythmExposureLogic.getExposureFactor(level, player);
+            this.lastUpdateTick = currentTick;
+        }
 
-        // 4. 最终目标透明度
-        float targetAlpha = rawRhythm * biomeWeight * 0.8f;
+        float targetAlpha = state.intensity() * this.cachedExposure * 0.8f;
 
         // 非对称平滑过渡
         float dt = deltaTracker.getGameTimeDeltaPartialTick(true);
@@ -72,7 +76,7 @@ public class PulseOverlay implements LayeredDraw.Layer {
 
         boolean isWarningPhase = (state.phase() == RhythmPhase.WARNING);
 
-        if (isWarningPhase && biomeWeight > 0.1f) {
+        if (isWarningPhase && state.intensity() > 0.1f) {
             float time = level.getGameTime() + dt;
 
             // 频率: 0.4 (约每秒 1.5 次呼吸，比较急促)
@@ -80,7 +84,7 @@ public class PulseOverlay implements LayeredDraw.Layer {
             float pulse = (Mth.sin(time * 0.4f) + 1.0f) * 0.5f * 0.05f;
 
             // 脉动强度也受群系权重影响
-            finalAlpha += pulse * biomeWeight;
+            finalAlpha += pulse * state.intensity();
         }
 
         if (finalAlpha > 0.01f) {
