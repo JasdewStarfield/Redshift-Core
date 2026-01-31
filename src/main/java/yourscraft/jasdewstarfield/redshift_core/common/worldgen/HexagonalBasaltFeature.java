@@ -6,6 +6,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.Mth;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
@@ -14,6 +15,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
+import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftBlocks;
 
 public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
 
@@ -88,8 +90,10 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
                     continue;
                 }
 
+                int groundY = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, cx, cz);
+
                 // 边缘校验
-                if (!isSafeFromBiomeEdge(level, cx, cz, 100, targetBiomeKey)) {
+                if (!isSafeFromBiomeEdge(level, cx, cz, groundY, targetBiomeKey)) {
                     continue;
                 }
 
@@ -97,11 +101,11 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
                 Integer surfaceY = calculateHexHeight(level, seed, cx, cz, q, r);
                 if (surfaceY == null) continue;
 
-                int groundY = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, cx, cz);
+                int relativeHeight = surfaceY - groundY;
                 boolean isGroundLayer = (surfaceY <= groundY + 1);
 
                 // 4. 生成柱子实体 (绘制六边形内的所有方块)
-                if (placeHexColumn(level, mutablePos, cx, cz, q, r, surfaceY, isGroundLayer)) {
+                if (placeHexColumn(level, mutablePos, cx, cz, q, r, surfaceY, isGroundLayer, relativeHeight)) {
                     placedAny = true;
                 }
             }
@@ -115,8 +119,9 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
      * 绘制单根六边形柱子
      */
     private boolean placeHexColumn(WorldGenLevel level, BlockPos.MutableBlockPos mutablePos,
-                                   int cx, int cz, long q, long r, int surfaceY, boolean isGroundLayer) {
+                                   int cx, int cz, long q, long r, int surfaceY, boolean isGroundLayer, int relativeHeight) {
         boolean placed = false;
+        RandomSource random = level.getRandom();
 
         // 扫描范围：中心点周围 (HEX_SIZE * 2) 的方块
         int scanRadius = (int)Math.ceil(HEX_SIZE * 2.0);
@@ -140,17 +145,33 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
                 BlockState pillarBlock;
                 BlockState topBlock;
 
+                boolean isCenter = (dx == 0 && dz == 0);
+
                 boolean canPlace;
                 if (isGroundLayer) {
                     pillarBlock = Blocks.BLACKSTONE.defaultBlockState();
-                    topBlock = Blocks.BLACKSTONE.defaultBlockState();
+
+                    // 规则：极小概率 (0.5%) 在露天区域生成，且必须在中心
+                    if (isCenter && random.nextFloat() < 0.005f) {
+                        topBlock = RedshiftBlocks.GEYSER.get().defaultBlockState();
+                    } else {
+                        topBlock = Blocks.BLACKSTONE.defaultBlockState();
+                    }
+
                     canPlace = currentState.canBeReplaced() ||
                             currentState.is(Blocks.BASALT) ||
                             currentState.is(Blocks.POLISHED_BASALT) ||
                             currentState.is(Blocks.BLACKSTONE);
                 } else {
                     pillarBlock = Blocks.BASALT.defaultBlockState();
-                    topBlock = Blocks.POLISHED_BASALT.defaultBlockState();
+
+                    // 规则：小概率 (4%) 在"较低矮" (高度 < 25) 的石柱顶端生成，且必须在中心
+                    if (isCenter && relativeHeight < 40 && random.nextFloat() < 0.04f) {
+                        topBlock = RedshiftBlocks.GEYSER.get().defaultBlockState();
+                    } else {
+                        topBlock = Blocks.POLISHED_BASALT.defaultBlockState();
+                    }
+
                     canPlace = currentState.canBeReplaced();
                 }
 

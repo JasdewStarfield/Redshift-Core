@@ -170,7 +170,7 @@ public class RhythmBlastManager {
         }
     }
 
-    private static boolean isValidTarget(Entity entity) {
+    public static boolean isValidTarget(Entity entity) {
         if (entity.isSpectator() || entity instanceof BlockAttachedEntity) return false;
         if (!entity.isPushable()) {
             return entity instanceof ItemEntity;
