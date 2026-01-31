@@ -13,6 +13,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import yourscraft.jasdewstarfield.redshift_core.RedshiftCore;
 import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftDamageTypes;
@@ -252,5 +253,13 @@ public class RhythmBlastManager {
                 false,
                 true
         ));
+    }
+
+    // 服务器启动时，清理缓存
+    @SubscribeEvent
+    public static void onServerStarting(ServerStartingEvent event) {
+        LAST_BLAST_TIMESTAMPS.clear();
+        EXPOSURE_CACHE.clear();
+        POS_CACHE.clear();
     }
 }

@@ -99,5 +99,4 @@ public class RhythmManager {
     public static float getIntensity(Level level) {
         return getState(level).intensity();
     }
-
 }

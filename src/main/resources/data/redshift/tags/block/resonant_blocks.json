@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
+    "redshift:basalt_geyser",
     "minecraft:basalt",
     "minecraft:polished_basalt",
     "minecraft:smooth_basalt",
