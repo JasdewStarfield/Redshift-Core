@@ -25,15 +25,22 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
 
     // --- 噪音参数设定 ---
     // 1. 岛屿掩码：决定哪里有柱子。频率越低，岛屿越大。
-    private static final double ISLAND_SCALE = 0.008;
+    private static final double ISLAND_SCALE = 0.004;
     private static final double ISLAND_THRESHOLD = -0.35; // 阈值，大于此值才生成
 
     // 2. 峡谷/裂缝：用于切割跑道。频率较高，形成细长条纹。
-    private static final double CANYON_SCALE = 0.06;
+    private static final double CANYON_SCALE = 0.012;
     private static final double CANYON_WIDTH = 0.12; // 裂缝宽度
 
     // 3. 高度地形：决定柱子高度。
-    private static final double HEIGHT_SCALE = 0.02;
+    private static final double HEIGHT_SCALE = 0.015;
+
+    private enum GeyserType {
+        NONE,
+        LAUNCHER, // 谷底跳板：在地面，负责把人送上柱子
+        RELAY,    // 中继站：在矮柱子顶，负责送去高柱子
+        HAZARD    // 陷阱：在最高点，干扰挖掘
+    }
 
     public HexagonalBasaltFeature(Codec<NoneFeatureConfiguration> codec) {
         super(codec);
@@ -44,6 +51,7 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
         WorldGenLevel level = context.level();
         BlockPos origin = context.origin();
         long seed = level.getSeed();
+        RandomSource random = level.getRandom();
 
         boolean placedAny = false;
 
@@ -98,14 +106,16 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
                 }
 
                 // 3. 计算高度
-                Integer surfaceY = calculateHexHeight(level, seed, cx, cz, q, r);
+                Integer surfaceY = calculateAbsoluteHeight(level, seed, cx, cz, groundY);
                 if (surfaceY == null) continue;
 
                 int relativeHeight = surfaceY - groundY;
                 boolean isGroundLayer = (surfaceY <= groundY + 1);
 
+                GeyserType geyserType = determineGeyserType(level, seed, cx, cz, q, r, surfaceY, isGroundLayer, random);
+
                 // 4. 生成柱子实体 (绘制六边形内的所有方块)
-                if (placeHexColumn(level, mutablePos, cx, cz, q, r, surfaceY, isGroundLayer, relativeHeight)) {
+                if (placeHexColumn(level, mutablePos, cx, cz, q, r, surfaceY, isGroundLayer, geyserType)) {
                     placedAny = true;
                 }
             }
@@ -114,14 +124,87 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
         return placedAny;
     }
 
+    /**
+     * 决策逻辑：根据周围邻居的绝对高度差，决定是否放置喷口
+     */
+    private GeyserType determineGeyserType(WorldGenLevel level, long seed, int cx, int cz, long q, long r,
+                                           int currentAbsY, boolean isGroundLayer, RandomSource random) {
+
+        // 性能优化：先做简单的概率剔除，避免每个柱子都去算邻居，太费性能
+        // 我们只在 30% 的柱子上进行"环境感知"
+        if (random.nextFloat() > 0.3f) return GeyserType.NONE;
+
+        boolean hasValidLauncherTarget = false; // 是否有适合作为跳板的目标 (高差 > 15)
+        boolean hasValidRelayTarget = false;    // 是否有适合作为中继的目标 (高差 10~28)
+
+        int maxNeighborY = -999;
+
+        // 遍历 6 个邻居
+        // Hex 邻居偏移量: (1,0), (1,-1), (0,-1), (-1,0), (-1,1), (0,1)
+        long[][] directions = {{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}};
+
+        for (long[] dir : directions) {
+            long nq = q + dir[0];
+            long nr = r + dir[1];
+
+            // 获取邻居的世界坐标
+            int[] nCoord = HexMath.hexToBlock(nq, nr, HEX_SIZE);
+            int nx = nCoord[0];
+            int nz = nCoord[1];
+
+            // 必须重新获取邻居的地面高度，因为山坡可能很陡
+            int nGroundY = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, nx, nz);
+
+            // 计算邻居绝对高度
+            Integer nY = calculateAbsoluteHeight(level, seed, nx, nz, nGroundY);
+
+            if (nY != null) {
+                // 更新最高邻居记录 (服务于 Hazard 判定)
+                if (nY > maxNeighborY) {
+                    maxNeighborY = nY;
+                }
+
+                int diff = nY - currentAbsY;
+
+                if (diff > 15) {
+                    hasValidLauncherTarget = true;
+                }
+
+                if (diff >= 10 && diff <= 28) {
+                    hasValidRelayTarget = true;
+                }
+            }
+        }
+
+        // 如果周围没有有效柱子（孤岛），不生成
+        if (maxNeighborY == -999) return GeyserType.NONE;
+
+        // 策略 A: 谷底跳板
+        if (isGroundLayer && hasValidLauncherTarget) {
+            return (random.nextFloat() < 0.6f) ? GeyserType.LAUNCHER : GeyserType.NONE;
+        }
+
+        // 策略 B: 中继站
+        if (!isGroundLayer && hasValidRelayTarget) {
+            return (random.nextFloat() < 0.4f) ? GeyserType.RELAY : GeyserType.NONE;
+        }
+
+        // 策略 C: 陷阱
+        if (!isGroundLayer && (maxNeighborY - currentAbsY < -2) && currentAbsY > 100) {
+            return (random.nextFloat() < 0.8f) ? GeyserType.HAZARD : GeyserType.NONE;
+        }
+
+        return GeyserType.NONE;
+    }
+
 
     /**
      * 绘制单根六边形柱子
      */
     private boolean placeHexColumn(WorldGenLevel level, BlockPos.MutableBlockPos mutablePos,
-                                   int cx, int cz, long q, long r, int surfaceY, boolean isGroundLayer, int relativeHeight) {
-        boolean placed = false;
+                                   int cx, int cz, long q, long r, int surfaceY, boolean isGroundLayer, GeyserType geyserType) {
         RandomSource random = level.getRandom();
+        boolean placed = false;
 
         // 扫描范围：中心点周围 (HEX_SIZE * 2) 的方块
         int scanRadius = (int)Math.ceil(HEX_SIZE * 2.0);
@@ -145,15 +228,16 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
                 BlockState pillarBlock;
                 BlockState topBlock;
 
-                boolean isCenter = (dx == 0 && dz == 0);
+                int distSq = dx * dx + dz * dz;
+                boolean isCenter = (distSq == 0);
 
                 boolean canPlace;
                 if (isGroundLayer) {
                     pillarBlock = Blocks.BLACKSTONE.defaultBlockState();
 
-                    // 规则：极小概率 (0.5%) 在露天区域生成，且必须在中心
-                    if (isCenter && random.nextFloat() < 0.005f) {
+                    if (isCenter && geyserType == GeyserType.LAUNCHER) {
                         topBlock = RedshiftBlocks.GEYSER.get().defaultBlockState();
+                        pillarBlock = Blocks.MAGMA_BLOCK.defaultBlockState();
                     } else {
                         topBlock = Blocks.BLACKSTONE.defaultBlockState();
                     }
@@ -165,9 +249,9 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
                 } else {
                     pillarBlock = Blocks.BASALT.defaultBlockState();
 
-                    // 规则：小概率 (4%) 在"较低矮" (高度 < 25) 的石柱顶端生成，且必须在中心
-                    if (isCenter && relativeHeight < 40 && random.nextFloat() < 0.04f) {
+                    if (isCenter && (geyserType == GeyserType.RELAY || geyserType == GeyserType.HAZARD)) {
                         topBlock = RedshiftBlocks.GEYSER.get().defaultBlockState();
+                        pillarBlock = Blocks.MAGMA_BLOCK.defaultBlockState();
                     } else {
                         topBlock = Blocks.POLISHED_BASALT.defaultBlockState();
                     }
@@ -178,6 +262,19 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
                 if (canPlace) {
                     level.setBlock(mutablePos, topBlock, 2);
                     placed = true;
+
+                    // 逻辑：如果是陷阱，且不是中心喷口位置（在喷口周围），尝试生成水晶
+                    if (geyserType == GeyserType.HAZARD && !isCenter && !isGroundLayer && distSq <= 12) {
+                        // 40% 几率生成，因为范围小了，概率可以稍微调高一点，保证簇拥感
+                        mutablePos.setY(surfaceY + 1);
+                        if (random.nextFloat() < 0.4f) {
+                            if (level.isEmptyBlock(mutablePos)) {
+                                // TODO: 换成自定义压电石英簇方块
+                                level.setBlock(mutablePos, Blocks.AMETHYST_CLUSTER.defaultBlockState(), 2);
+                            }
+                        }
+                        mutablePos.setY(surfaceY); // 重置 Y
+                    }
 
                     // 4. 向下延伸柱身
                     int startY = surfaceY - 1;
@@ -195,7 +292,7 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
                         }
 
                         BlockState blockToPlace;
-                        if (!isGroundLayer && shouldBeBlackstone(level.getSeed(), worldX, y, worldZ)) {
+                        if (pillarBlock.is(Blocks.BASALT) && shouldBeBlackstone(level.getSeed(), worldX, y, worldZ)) {
                             blockToPlace = Blocks.BLACKSTONE.defaultBlockState();
                         } else {
                             blockToPlace = pillarBlock;
@@ -253,15 +350,23 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
      * 核心逻辑：决定某个六边形是否存在、多高
      * 返回 null 表示此处不生成柱子 (空地/裂缝)
      */
-    private Integer calculateHexHeight(WorldGenLevel level, long seed, int x, int z, long q, long r) {
-        // A. 基础地面检查
-        int groundY = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, x, z);
+    private Integer calculateAbsoluteHeight(WorldGenLevel level, long seed, int x, int z, int groundY) {
         if (groundY <= level.getMinBuildHeight()) return null;
 
+        // 使用一个很大比例的噪音来扭曲坐标
+        double warpScale = 0.005;
+        double warpStrength = 20.0; // 偏移力度
+
+        double offsetX = pseudoPerlin(seed + 555, x * warpScale, z * warpScale) * warpStrength;
+        double offsetZ = pseudoPerlin(seed + 666, x * warpScale, z * warpScale) * warpStrength;
+
+        double sampleX = x + offsetX;
+        double sampleZ = z + offsetZ;
+
         // --- 1. 基础噪音采样 ---
-        double maskNoise = pseudoPerlin(seed, x * ISLAND_SCALE, z * ISLAND_SCALE);
-        double canyonNoise = pseudoPerlin(seed + 123, x * CANYON_SCALE, z * CANYON_SCALE);
-        double heightNoise = pseudoPerlin(seed + 999, x * HEIGHT_SCALE, z * HEIGHT_SCALE);
+        double maskNoise = pseudoPerlin(seed, sampleX * ISLAND_SCALE, sampleZ * ISLAND_SCALE);
+        double canyonNoise = pseudoPerlin(seed + 123, sampleX * CANYON_SCALE, sampleZ * CANYON_SCALE);
+        double heightNoise = pseudoPerlin(seed + 999, sampleX * HEIGHT_SCALE, sampleZ * HEIGHT_SCALE);
 
         // --- 2. 判定逻辑状态 ---
 
@@ -276,26 +381,41 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
             return groundY;
         }
         if (!hasColumn) {
-            return groundY + 1;
+            return groundY;
         }
 
         // 高度计算
         int steppedHeight = getSteppedHeight(maskNoise, heightNoise);
 
-        return groundY + steppedHeight;
+        // 微小抖动
+        double jitter = pseudoPerlin(seed + 777, x * 0.3, z * 0.3);
+        int jitterOffset = (int)(jitter * 4.0);
+
+        // 最终高度 = 基准面 + 柱子自身的生长高度 + 抖动
+        int finalSurfaceY = groundY + steppedHeight + jitterOffset;
+
+        return Math.max(finalSurfaceY, groundY + 1);
     }
 
     private static int getSteppedHeight(double maskNoise, double heightNoise) {
-        double edgeFactor = Mth.clamp((maskNoise - ISLAND_THRESHOLD) * 2.0, 0.0, 1.0);
-        double rawHeight = 10 + (heightNoise + 1.0) / 2.0 * 55;
+        double normHeight = (heightNoise + 1.0) / 2.0;
+        double dramaticHeight = Math.pow(normHeight, 1.5);
+
+        int minH = 5;
+        int maxH = 120;
+
+        double rawHeight = minH + dramaticHeight * (maxH - minH);
+
+        // 边缘削减
+        double edgeFactor = Mth.clamp((maskNoise - ISLAND_THRESHOLD) * 4.0, 0.0, 1.0);
         rawHeight *= edgeFactor;
 
         // 阶梯化处理
         int dynamicStep;
         if (edgeFactor < 0.3) {
-            dynamicStep = 2; // 边缘非常平缓
+            dynamicStep = 4; // 边缘非常平缓
         } else if (edgeFactor < 0.6) {
-            dynamicStep = 5; // 过渡带
+            dynamicStep = 6; // 过渡带
         } else {
             dynamicStep = 10; // 中心宏伟的管风琴
         }
