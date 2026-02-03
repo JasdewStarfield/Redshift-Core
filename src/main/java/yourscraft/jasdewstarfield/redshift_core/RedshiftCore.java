@@ -16,6 +16,7 @@ public class RedshiftCore {
     public RedshiftCore(IEventBus modEventBus, ModContainer modContainer) {
         RedshiftEffects.register(modEventBus);
         RedshiftSounds.register(modEventBus);
+        RedshiftParticles.register(modEventBus);
         RedshiftFeatures.register(modEventBus);
         RedshiftBlocks.register(modEventBus);
         RedshiftBlockEntities.register(modEventBus);

@@ -15,6 +15,7 @@ import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmBlastM
 import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmManager;
 import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmPhase;
 import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftBlockEntities;
+import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftParticles;
 import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftTags;
 
 import java.util.List;
@@ -179,10 +180,8 @@ public class GeyserBlockEntity extends BlockEntity {
         if (isBlocked) return;
 
         double x = pos.getX() + 0.5;
-        double startY = pos.getY() + 1.0;
+        double y = pos.getY() + 1.0;
         double z = pos.getZ() + 0.5;
-
-        double clearance = cutoffY - startY;
 
         // 预警期：冒少量烟
         if (phase == RhythmPhase.WARNING) {
@@ -195,11 +194,14 @@ public class GeyserBlockEntity extends BlockEntity {
         // 爆发期：大量云雾/喷发粒子
         else if (phase == RhythmPhase.BLAST) {
             for (int i = 0; i < 3; i++) {
-                level.addParticle(ParticleTypes.CLOUD,
+                level.addParticle(RedshiftParticles.GEYSER_STEAM.get(),
                         x + (level.random.nextGaussian() * 0.2),
                         y,
                         z + (level.random.nextGaussian() * 0.2),
-                        0, 0.5 + (level.random.nextDouble() * 0.5), 0);
+                        level.random.nextGaussian() * 0.1,
+                        0.5 + (level.random.nextDouble() * 0.5),
+                        level.random.nextGaussian() * 0.1
+                );
             }
         }
     }
