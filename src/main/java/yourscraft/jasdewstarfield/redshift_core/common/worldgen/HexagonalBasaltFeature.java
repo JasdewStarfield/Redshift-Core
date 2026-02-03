@@ -264,8 +264,7 @@ public class HexagonalBasaltFeature extends Feature<NoneFeatureConfiguration> {
                     placed = true;
 
                     // 逻辑：如果是陷阱，且不是中心喷口位置（在喷口周围），尝试生成水晶
-                    if (geyserType == GeyserType.HAZARD && !isCenter && !isGroundLayer && distSq <= 12) {
-                        // 40% 几率生成，因为范围小了，概率可以稍微调高一点，保证簇拥感
+                    if (geyserType == GeyserType.HAZARD && !isCenter && !isGroundLayer && distSq <= 8) {
                         mutablePos.setY(surfaceY + 1);
                         if (random.nextFloat() < 0.4f) {
                             if (level.isEmptyBlock(mutablePos)) {

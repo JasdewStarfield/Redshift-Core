@@ -10,6 +10,7 @@ public class RedshiftTags {
 
     public static class Blocks {
         public static final TagKey<Block> RESONANT_BLOCKS = tag("resonant_blocks");
+        public static final TagKey<Block> GEYSER_PERMEABLE = tag("geyser_permeable");
 
         private static TagKey<Block> tag(String name) {
             return TagKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath(RedshiftCore.MODID, name));
