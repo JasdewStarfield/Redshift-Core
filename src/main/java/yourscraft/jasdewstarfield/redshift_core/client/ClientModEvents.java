@@ -7,7 +7,7 @@ import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import yourscraft.jasdewstarfield.redshift_core.RedshiftCore;
-import yourscraft.jasdewstarfield.redshift_core.client.rhythm.PulseOverlay;
+import yourscraft.jasdewstarfield.redshift_core.client.rhythm.RhythemPulseOverlay;
 import yourscraft.jasdewstarfield.redshift_core.client.fog.FogOverlay;
 import yourscraft.jasdewstarfield.redshift_core.common.geyser.GeyserSteamParticle;
 import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftParticles;
@@ -26,7 +26,7 @@ public class ClientModEvents {
         event.registerAbove(
                 ResourceLocation.fromNamespaceAndPath(RedshiftCore.MODID, "toxic_fog_overlay"),
                 ResourceLocation.fromNamespaceAndPath(RedshiftCore.MODID, "basalt_organ_flash_overlay"),
-                new PulseOverlay()
+                new RhythemPulseOverlay()
         );
     }
 

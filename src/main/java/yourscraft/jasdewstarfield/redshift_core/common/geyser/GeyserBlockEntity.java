@@ -16,6 +16,7 @@ import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmManage
 import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmPhase;
 import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftBlockEntities;
 import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftParticles;
+import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftSounds;
 import yourscraft.jasdewstarfield.redshift_core.registry.RedshiftTags;
 
 import java.util.List;
@@ -28,6 +29,8 @@ public class GeyserBlockEntity extends BlockEntity {
     private int cachedCutoffY = -1;
     // 缓存的阻塞状态：如果根部就被堵死，则为 true
     private boolean cachedIsBlocked = false;
+
+    private boolean hasPlayedSound = false;
 
     public GeyserBlockEntity(BlockPos pos, BlockState blockState) {
         super(RedshiftBlockEntities.GEYSER.get(), pos, blockState);
@@ -43,6 +46,9 @@ public class GeyserBlockEntity extends BlockEntity {
             if (blockEntity.cachedCutoffY != -1) {
                 blockEntity.resetCache();
             }
+            if (blockEntity.hasPlayedSound) {
+                blockEntity.hasPlayedSound = false;
+            }
             return;
         }
 
@@ -53,6 +59,9 @@ public class GeyserBlockEntity extends BlockEntity {
         // 3. 客户端逻辑：视觉效果 (粒子)
         if (level.isClientSide) {
             handleClientParticles(level, pos, phase, blockEntity.cachedIsBlocked, blockEntity.cachedCutoffY);
+            if (phase == RhythmPhase.BLAST && !blockEntity.cachedIsBlocked) {
+                playEruptionSound(level, pos);
+            }
             return;
         }
 
@@ -83,11 +92,6 @@ public class GeyserBlockEntity extends BlockEntity {
                 break;
             }
         }
-    }
-
-    private void resetCache() {
-        this.cachedCutoffY = -1;
-        this.cachedIsBlocked = false;
     }
 
     private void handleEruptionPhysics(Level level, BlockPos pos) {
@@ -204,5 +208,26 @@ public class GeyserBlockEntity extends BlockEntity {
                 );
             }
         }
+    }
+
+    private static void playEruptionSound(Level level, BlockPos pos) {
+        BlockEntity be = level.getBlockEntity(pos);
+        if (!(be instanceof GeyserBlockEntity geyser)) return;
+
+        // 如果本轮已经播放过，直接跳过
+        if (geyser.hasPlayedSound) return;
+
+        // 播放声音
+        // volume: 0.8 (稍大), pitch: 0.8 ~ 1.2 (随机音调)
+        level.playLocalSound(pos, RedshiftSounds.BASALT_GEYSER_ERUPT.get(),
+                net.minecraft.sounds.SoundSource.BLOCKS,
+                0.8f, 0.8f + level.random.nextFloat() * 0.4f, false);
+
+        geyser.hasPlayedSound = true;
+    }
+
+    private void resetCache() {
+        this.cachedCutoffY = -1;
+        this.cachedIsBlocked = false;
     }
 }

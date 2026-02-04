@@ -33,14 +33,18 @@ public class RhythmExposureLogic {
             {-CHECK_RADIUS, -CHECK_RADIUS}
     };
 
-    public static float getExposureFactor(Level level, Entity entity) {
-        // 1. 群系权重 (Biome Weight) - 如果不在群系，直接返回 0
-        float biomeWeight = BiomeSamplerUtil.sampleBiomeWeight(
+    public static float getRhythmBiomeWeight(Level level, Entity entity) {
+        return BiomeSamplerUtil.sampleBiomeWeight(
                 level,
                 entity.position(),
                 32, 16,
                 holder -> holder.is(RhythmManager.BASALT_ORGAN)
         );
+    }
+
+    public static float getExposureFactor(Level level, Entity entity) {
+        // 1. 群系权重 (Biome Weight) - 如果不在群系，直接返回 0
+        float biomeWeight = getRhythmBiomeWeight(level, entity);
 
         if (biomeWeight <= 0.01f) return 0.0f;
 

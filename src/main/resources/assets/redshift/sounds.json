@@ -43,6 +43,23 @@
       }
     ]
   },
+  "ambient.basalt.rhythm_blast": {
+    "subtitle": "subtitles.redshift.ambient.basalt.rhythm_blast",
+    "sounds": [
+      {
+        "name": "redshift:ambient/basalt_organ/basalt_organ_blast",
+        "stream": true
+      }
+    ]
+  },
+  "block.basalt_geyser.erupt": {
+    "subtitle": "subtitles.redshift.block.basalt_geyser.erupt",
+    "sounds": [
+      {
+        "name": "redshift:block/basalt_geyser_erupt"
+      }
+    ]
+  },
   "ambient.wasteland.loop": {
     "category": "ambient",
     "subtitle": "subtitles.ambient.redshift.wasteland.loop",

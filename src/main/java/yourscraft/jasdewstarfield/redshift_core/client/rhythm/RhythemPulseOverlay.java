@@ -14,9 +14,8 @@ import yourscraft.jasdewstarfield.redshift_core.RedshiftCore;
 import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmExposureLogic;
 import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmManager;
 import yourscraft.jasdewstarfield.redshift_core.common.logic.rhythm.RhythmPhase;
-import yourscraft.jasdewstarfield.redshift_core.common.util.BiomeSamplerUtil;
 
-public class PulseOverlay implements LayeredDraw.Layer {
+public class RhythemPulseOverlay implements LayeredDraw.Layer {
 
     private static final ResourceLocation VIGNETTE_LOCATION = ResourceLocation.fromNamespaceAndPath(RedshiftCore.MODID, "textures/misc/pulse_overlay.png");
 

@@ -23,6 +23,9 @@ public class RedshiftSounds {
     // --- 2. 玄武岩管风琴 ---
     public static final DeferredHolder<SoundEvent, SoundEvent> BASALT_LOOP = register("ambient.basalt_organ.loop");
     public static final DeferredHolder<SoundEvent, SoundEvent> BASALT_ADDITIONS = register("ambient.basalt_organ.additions");
+    public static final DeferredHolder<SoundEvent, SoundEvent> BASALT_RHYTHM_BLAST = register("ambient.basalt.rhythm_blast");
+
+    public static final DeferredHolder<SoundEvent, SoundEvent> BASALT_GEYSER_ERUPT = register("block.basalt_geyser.erupt");
 
     // --- 3. 废土 ---
     public static final DeferredHolder<SoundEvent, SoundEvent> WASTELAND_LOOP = register("ambient.wasteland.loop");
